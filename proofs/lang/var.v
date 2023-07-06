@@ -628,6 +628,17 @@ Proof.
   by rewrite /= ih.
 Qed.
 
+Lemma sv_of_list_id_map X f (xs : seq X) :
+  Sv.Equal (sv_of_list id (map f xs)) (sv_of_list f xs).
+Proof.
+  move=> x.
+  split.
+  all: move=> /sv_of_listP h.
+  all: apply/sv_of_listP.
+  all: move: h.
+  all: by rewrite map_id.
+Qed.
+
 Lemma sv_of_list_mem_head X f (x : X) xs :
   Sv.mem (f x) (sv_of_list f (x :: xs)).
 Proof. rewrite sv_of_listE. exact: mem_head. Qed.
@@ -642,6 +653,24 @@ Proof.
   exact: orbT.
 Qed.
 
+Lemma sv_of_list_cat X (xs ys : seq X) f :
+  Sv.Equal
+    (sv_of_list f (xs ++ ys))
+    (Sv.union (sv_of_list f xs) (sv_of_list f ys)).
+Proof.
+  split=> hx.
+
+  - apply/Sv.union_spec.
+    move: hx => /sv_of_listP.
+    rewrite map_cat mem_cat.
+    move=> /orP [] /sv_of_listP ?; by econstructor.
+
+  apply/sv_of_listP.
+  rewrite map_cat mem_cat.
+  apply/orP.
+  move: hx => /Sv.union_spec [] /sv_of_listP hx; by econstructor.
+Qed.
+
 Lemma disjoint_subset_diff xs ys :
   disjoint xs ys
   -> Sv.Subset xs (Sv.diff xs ys).
@@ -649,6 +678,12 @@ Proof.
   move=> /disjoint_sym /disjoint_diff /SvP.MP.equal_sym.
   exact: SvP.MP.subset_equal.
 Qed.
+
+Lemma Sv_subset_diff_diff xs xs' ys ys' :
+  Sv.Subset xs ys
+  -> Sv.Subset ys' xs'
+  -> Sv.Subset (Sv.diff xs xs') (Sv.diff ys ys').
+Proof. clear. SvD.fsetdec. Qed.
 
 Lemma in_add_singleton x y :
   Sv.In x (Sv.add y (Sv.singleton x)).
@@ -721,6 +756,62 @@ Lemma Sv_neq_not_in_singleton x y :
   x <> y
   -> ~ Sv.In y (Sv.singleton x).
 Proof. SvD.fsetdec. Qed.
+
+Lemma Sv_union_empty_r s :
+  Sv.Equal (Sv.union s Sv.empty) s.
+Proof. SvD.fsetdec. Qed.
+
+Lemma Sv_union_diff_diff s0 s1 s2 :
+  Sv.Equal
+    (Sv.union (Sv.diff s0 s2) (Sv.diff s1 s2))
+    (Sv.diff (Sv.union s0 s1) s2).
+Proof. SvD.fsetdec. Qed.
+
+Lemma Sv_diff_diff s0 s1 s2 :
+  Sv.Equal
+    (Sv.diff (Sv.diff s0 s1) s2)
+    (Sv.diff s0 (Sv.union s1 s2)).
+Proof. SvD.fsetdec. Qed.
+
+Lemma sv_of_list_filter (X : eqType) f s (xs : seq X) :
+  Sv.Equal
+    (sv_of_list f (filter (fun x => ~~ Sv.mem (f x) s) xs))
+    (Sv.diff (sv_of_list f xs) s).
+Proof.
+  move=> fx.
+  split.
+
+  - move=> /sv_of_listP /xseq.in_map [x hx ?]; subst fx.
+    move: hx => /xseq.InP.
+    rewrite mem_filter.
+    move=> /andP [hs hxs].
+    apply/Sv.diff_spec.
+    split; last by apply/Sv_memP.
+    apply: sv_of_listP.
+    by rewrite (map_f _ hxs).
+
+  move=> /Sv.diff_spec [hxs hs].
+  move: hxs => /sv_of_listP.
+  move=> /xseq.in_map [x hxs ?]; subst fx.
+  apply/sv_of_listP.
+  apply/xseq.in_map.
+  eexists; last done.
+  apply/xseq.InP.
+  rewrite mem_filter.
+  move: hs => /Sv_memP -> /=.
+  by apply/xseq.InP.
+Qed.
+
+Lemma sv_of_list_elements s :
+  Sv.Equal (sv_of_list id (Sv.elements s)) s.
+Proof.
+  apply: SvP.MP.subset_antisym.
+  - move=> x /sv_of_listP. rewrite map_id. by move=> /Sv_elemsP.
+  move=> x hx.
+  apply/sv_of_listP.
+  rewrite map_id.
+  by apply/Sv_elemsP.
+Qed.
 
 Lemma Sv_subset_remove s x :
   Sv.subset (Sv.remove x s) s.

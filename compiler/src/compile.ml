@@ -205,6 +205,8 @@ let compile (type reg regx xreg rflag cond asm_op extra_op)
     | None -> None
   in
 
+  let rzm_of_fn fn = Option.default rzm_none (get_annot fn).annot_rzm in
+
   let cparams =
     {
       Compiler.rename_fd;
@@ -240,6 +242,7 @@ let compile (type reg regx xreg rflag cond asm_op extra_op)
       Compiler.fresh_id;
       Compiler.fresh_var_ident = Conv.fresh_var_ident;
       Compiler.is_reg_array;
+      Compiler.cp_rzm_of_fn = rzm_of_fn;
       Compiler.slh_info;
       Compiler.clear_stack_info = szs_of_fn;
     }

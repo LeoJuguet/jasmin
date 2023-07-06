@@ -190,3 +190,8 @@ val warning :
 (* -------------------------------------------------------------------- *)
 
 val szero_strategies : (string * Clear_stack_strategy.cs_strategy) list
+
+(* -------------------------------------------------------------------- *)
+
+val rzm_none : Register_zeroization_mode.rzmode
+val rzmodes : (string * Register_zeroization_mode.rzmode) list

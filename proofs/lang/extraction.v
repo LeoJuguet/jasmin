@@ -62,6 +62,7 @@ Separate Extraction
   warray_
   sopn
   expr
+  register_zeroization_mode
   sem
   sem_params_of_arch_extra
   arch_decl

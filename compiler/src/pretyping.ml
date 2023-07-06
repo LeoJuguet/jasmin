@@ -1844,12 +1844,19 @@ let process_f_annot loc funname f_cc annot =
     | Some css, _ -> Some (css, clear_size)
   in
 
+  let annot_rzm =
+    let mk_rzm = Annot.filter_string_list None rzmodes in
+    let rzm = Annot.ensure_uniq1 "registerzeroization" mk_rzm annot in
+    odefault !Glob_options.rzero_mode rzm
+  in
+
   { retaddr_kind;
     stack_allocation_size = Annot.ensure_uniq1 "stackallocsize" (Annot.pos_int None) annot;
     stack_size            = Annot.ensure_uniq1 "stacksize"      (Annot.pos_int None) annot;
     stack_align           = Annot.ensure_uniq1 "stackalign"     (Annot.wsize None)   annot;
     max_call_depth        = Annot.ensure_uniq1 "calldepth"      (Annot.pos_int None) annot;
     clear_stack;
+    annot_rzm;
     f_user_annot          = annot;
   }
 

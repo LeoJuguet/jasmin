@@ -9,6 +9,7 @@ Require
   clear_stack
   linearization
   lowering
+  register_zeroization
   stack_alloc
   slh_lowering
   asm_gen.
@@ -60,6 +61,9 @@ Record architecture_params
 
     (* Clear stack parameters. See clear_stack.v *)
     ap_csp : clear_stack.clear_stack_params;
+
+    (* Register zeroization parameters. See register_zeroization.v. *)
+    ap_rzp : register_zeroization.register_zeroization_params;
 
     (* ------------------------------------------------------------------------ *)
     (* Shared across multiple passes. *)

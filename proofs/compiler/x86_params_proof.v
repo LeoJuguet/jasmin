@@ -7,6 +7,7 @@ Require Import
   expr
   fexpr
   fexpr_sem
+  linear
   fexpr_facts
   psem
   psem_facts
@@ -24,7 +25,10 @@ Require Import
   clear_stack
   clear_stack_proof.
 Require
-  arch_sem.
+  register_zeroization
+  register_zeroization_proof
+  register_zeroization_proof_utils.
+Require arch_sem.
 Require Import
   arch_decl
   arch_extra
@@ -43,16 +47,10 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-<<<<<<< HEAD
 Local Open Scope vmap_scope.
 
-
-Section Section.
-Context {syscall_state : Type} {sc_sem : syscall_sem syscall_state}.
-=======
 Section Section.
 Context {atoI : arch_toIdent} {syscall_state : Type} {sc_sem : syscall_sem syscall_state}.
->>>>>>> main
 
 Section bla.
 Context { ovmi : one_varmap_info }.
@@ -1599,6 +1597,14 @@ Qed.
 Transparent Uptr.
 
 End bla.
+=======
+
+Context
+  {atoI : arch_toIdent}
+  {syscall_state : Type}
+  {sc_sem : syscall_sem syscall_state}
+  {call_conv : calling_convention}.
+>>>>>>> register-zeroization
 
 (* ------------------------------------------------------------------------ *)
 (* Flag combination hypotheses. *)
@@ -1694,13 +1700,11 @@ Definition x86_hsaparams : h_stack_alloc_params (ap_sap x86_params) :=
 Section LINEARIZATION.
 
 Definition x86_lassign_eval_instr
-  {call_conv : calling_convention}
-  (lp : lprog)
-  s0 s1 fn pc ii x e ws ws' w (w' : word ws') :
+  (lp : lprog) s0 s1 fn pc ii x e ws ws' w (w' : word ws') :
   sem_rexpr (emem s0) (evm s0) e = ok (Vword w')
   -> truncate_word ws w' = ok w
   -> write_lexpr x (Vword w) s0 = ok s1
-  -> let: li := li_of_copn_args ii (x86_lassign x ws e) in
+  -> let: li := li_of_lopn_args ii (x86_lassign x ws e) in
      let: ls0 := of_estate s0 fn pc in
      let: ls1 := of_estate s1 fn (pc + 1) in
      eval_instr lp li ls0 = ok ls1.
@@ -1718,10 +1722,7 @@ Proof.
   all: by rewrite addn1.
 Qed.
 
-Definition x86_op_align_eval_instr
-  {call_conv : calling_convention}
-  (lp : lprog)
-  ls ii xname vi ws al w :
+Definition x86_op_align_eval_instr (lp : lprog) ls ii xname vi ws al w :
   let: x :=
     {|
       v_var := {| vname := xname; vtype := sword ws; |};
@@ -1730,7 +1731,7 @@ Definition x86_op_align_eval_instr
   in
   (ws <= U64)%CMP
   -> get_var (lvm ls) (v_var x) = ok (Vword w)
-  -> let: li := li_of_copn_args ii (x86_op_align x ws al) in
+  -> let: li := li_of_lopn_args ii (x86_op_align x ws al) in
      let w' := align_word al w in
      let: vm' :=
        (lvm ls)
@@ -1772,7 +1773,6 @@ Qed.
 
 
 Context
-  {call_conv : calling_convention}
   (lp : lprog)
   (sp_rsp : Ident.ident)
   (fn : funname).
@@ -2005,7 +2005,7 @@ Qed.
 
 End LINEARIZATION.
 
-Definition x86_hliparams {call_conv : calling_convention} : h_linearization_params (ap_lip x86_params) :=
+Definition x86_hliparams : h_linearization_params (ap_lip x86_params) :=
   {|
     spec_lip_allocate_stack_frame := x86_spec_lip_allocate_stack_frame;
     spec_lip_free_stack_frame := x86_spec_lip_free_stack_frame;
@@ -2533,6 +2533,162 @@ Definition x86_hagparams : h_asm_gen_params (ap_agp x86_params) :=
     hagp_assemble_extra_op := assemble_extra_op;
   |}.
 
+
+(* ------------------------------------------------------------------------ *)
+(* Register zeroization hypotheses. *)
+
+Section REGISTER_ZEROIZATION.
+
+Import
+  linear_sem.
+Import
+  register_zeroization
+  register_zeroization_proof
+  register_zeroization_proof_utils.
+
+Definition x86_h_rz_zeroized (x : var) : option value :=
+  match vtype x with
+  | sword ws => Some (@Vword ws 0%R)
+  | sbool => Some (Vbool (x \in [:: to_var ZF; to_var PF ]))
+  | _ => None
+  end.
+
+Notation invariant := (invariant x86_h_rz_zeroized).
+
+(* All lemmas are generalized to code rather than a single instruction. *)
+Notation zeroize_var_cmd err :=
+  (fun x => Let args := x86_zeroize_var err x in ok [:: args ])
+  (only parsing).
+
+Lemma x86_zeroize_varP err_register x :
+  get_lopn_invariant (zeroize_var_cmd err_register) invariant x.
+Proof.
+  move=> lp scs vm m fn pre pos args ii h hbody.
+
+  move: h.
+  move: x => [[|||ws] xname] //=.
+  set x := {| vname := xname; |}.
+  rewrite /x86_zeroize_var /=.
+
+  case hws : (ws <= U64)%CMP;
+    move=> [?]; subst args.
+
+  - eexists; eexists; eexists; split.
+    + apply: LSem_step.
+      rewrite /lsem1 /step -{1}(addn0 (size pre)).
+      rewrite (find_instr_skip hbody) /=.
+
+      (* TODO: Abstract. *)
+      rewrite /eval_instr /=.
+      rewrite /of_estate /=.
+      subst x.
+      {
+        all: case: ws hws hbody => // _ _.
+        all: rewrite /= pword_of_wordE zero_extend_u addn1.
+        all: reflexivity.
+      }
+
+    (* TODO: This is the same as the wide register case. *)
+    split; first done; first done.
+    split=> y hy.
+
+    + move: hy => /sv_of_listP.
+      rewrite notin_cons.
+      move=> /andP [] /eqP hyx _.
+      rewrite /=.
+      by t_vm_get.
+
+    move: hy => /Sv_memP /sv_of_listP.
+    rewrite in_cons.
+    move=> /orP []; last done.
+    move=> /eqP ?; subst y.
+    rewrite /zeroized_on.
+    by rewrite get_var_eq /= wrepr0.
+
+  eexists; eexists; eexists; split.
+  - apply: LSem_step.
+    rewrite /lsem1 /step -{1}(addn0 (size pre)).
+    rewrite (find_instr_skip hbody) /=.
+
+    (* TODO: Abstract. *)
+    rewrite /eval_instr /=.
+    rewrite /of_estate /=.
+    subst x.
+    {
+      all: case: ws hws hbody => // _ _.
+      all: rewrite /= pword_of_wordE addn1.
+      all: reflexivity.
+    }
+
+  split; first done; first done.
+  split=> y hy.
+
+  - move: hy => /sv_of_listP.
+    rewrite notin_cons.
+    move=> /andP [] /eqP hyx _.
+    rewrite /=.
+    by t_vm_get.
+
+  move: hy => /Sv_memP /sv_of_listP.
+  rewrite in_cons.
+  move=> /orP []; last done.
+  move=> /eqP ?; subst y.
+  rewrite /zeroized_on.
+  by rewrite get_var_eq /=.
+Qed.
+
+Lemma x86_zeroize_flagsP :
+  zeroize_flags_spec x86_zeroize_flags x86_h_rz_zeroized.
+Proof.
+  move=> lp scs vm m err_flags fn ii xname P Q args.
+  move=> [?]; subst args.
+  set lflags := LLvar _ :: _.
+  move=> hx hbody.
+
+  eexists.
+
+  - apply: LSem_step.
+    rewrite /lsem1 /step -{1}(addn0 (size P)).
+    rewrite (find_instr_skip hbody) /=.
+    rewrite /eval_instr /=.
+    rewrite /sem_sopn /=.
+    rewrite /get_gvar /=.
+    move: hx.
+    rewrite /zeroized_on.
+    case: get_var => //= v.
+    move: v => [|||[]|] // w [?]; subst w.
+    rewrite /exec_sopn /=.
+    rewrite /of_estate /with_vm addn1 /=.
+    reflexivity.
+
+  split=> y; first last.
+
+  - move=> /Sv_memP /sv_of_listP.
+    rewrite /= /zeroized_on !in_cons.
+    repeat (move=> /orP [/eqP -> |]; first by t_get_var).
+    done.
+
+  move=> /sv_of_listP.
+  rewrite !notin_cons.
+  repeat (move=> /andP [] /eqP ?).
+  move=> _.
+  by t_vm_get.
+Qed.
+
+Lemma x86_h_rz_cmd_args :
+  h_rz_cmd_args_spec (rz_cmd_args x86_rzparams) x86_h_rz_zeroized.
+Proof.
+  exact: (naive_rz_cmd_argsP _ _ _ x86_zeroize_varP x86_zeroize_flagsP).
+Qed.
+
+Definition x86_hrzparams : h_register_zeroization_params x86_rzparams :=
+  {|
+    h_rz_cmd_args := x86_h_rz_cmd_args;
+  |}.
+
+End REGISTER_ZEROIZATION.
+
+
 (* ------------------------------------------------------------------------ *)
 (* Speculative execution. *)
 
@@ -2589,7 +2745,7 @@ Qed.
 
 (* ------------------------------------------------------------------------ *)
 
-Definition x86_h_params {call_conv : calling_convention} : h_architecture_params x86_params :=
+Definition x86_h_params : h_architecture_params x86_params :=
   {|
     hap_hpip := x86_hpiparams;
     hap_hsap := x86_hsaparams;
@@ -2598,6 +2754,7 @@ Definition x86_h_params {call_conv : calling_convention} : h_architecture_params
     hap_hlop := x86_hloparams;
     hap_hcsp := x86_hcsparams;
     hap_hagp := x86_hagparams;
+    hap_hrzp := x86_hrzparams;
     hap_hshp := x86_hshparams;
     hap_is_move_opP := x86_is_move_opP;
   |}.

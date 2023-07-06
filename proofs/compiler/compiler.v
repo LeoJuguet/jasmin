@@ -17,6 +17,7 @@ Require Import
   array_expansion
   array_init
   clear_stack
+  register_zeroization
   constant_prop
   dead_calls
   dead_code
@@ -100,6 +101,7 @@ Variant compiler_step :=
   | DeadCode_RegAllocation      : compiler_step
   | Linearization               : compiler_step
   | ClearStack                  : compiler_step
+  | RegisterZeroization         : compiler_step
   | Tunneling                   : compiler_step
   | Assembly                    : compiler_step.
 
@@ -131,6 +133,7 @@ Definition compiler_step_list := [::
   ; DeadCode_RegAllocation
   ; Linearization
   ; ClearStack
+  ; RegisterZeroization
   ; Tunneling
   ; Assembly
 ].
@@ -181,6 +184,7 @@ Record compiler_params
   fresh_var_ident  : v_kind -> instr_info -> Ident.name -> stype -> Ident.ident;
   is_reg_array     : var -> bool;
   clear_stack_info : funname -> option (cs_strategy * option wsize);
+  cp_rzm_of_fn     : funname -> rzmode;
   slh_info         : _uprog → funname → seq slh_t * seq slh_t
 }.
 
@@ -369,6 +373,12 @@ Definition compiler_back_end entries (pd: sprog) :=
   in
   Let pl := clear_stack_lprog (ap_csp aparams) css_of_fn pl in
   let pl := cparams.(print_linear) ClearStack pl in
+
+  (* Register zeroization. *)
+  Let pl :=
+    register_zeroization_lprog (cp_rzm_of_fn cparams) (ap_rzp aparams) pl
+  in
+  let pl := cparams.(print_linear) RegisterZeroization pl in
 
   (* tunneling                         *)
   Let pl := tunnel_program pl in

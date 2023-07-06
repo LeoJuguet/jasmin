@@ -23,12 +23,13 @@ module Arm_core = struct
   let atoI = X86_arch_full.atoI arm_decl
 
   let asm_e = Arm_extra.arm_extra atoI
-  let aparams = Arm_params.arm_params atoI
 end
 
-module Arm (Lowering_params : Arm_input) : Arch_full.Core_arch = struct
+module Arm (Arch_input : Arm_input) : Arch_full.Core_arch = struct
   include Arm_core
-  include Lowering_params
+  include Arch_input
+
+  let aparams = Arm_params.arm_params atoI (Asm_gen.ovm_i arm_decl atoI Arch_input.call_conv)
 
   (* TODO_ARM: r9 is a platform register. (cf. arch_decl)
      Here we assume it's just a variable register. *)

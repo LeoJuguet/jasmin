@@ -1,3 +1,5 @@
+module RZM = Register_zeroization_mode
+
 (* -------------------------------------------------------------------- *)
 module Map    = BatMap
 module Set    = BatSet
@@ -440,3 +442,37 @@ let warning (w:warning) loc =
 let szero_strategies =
   let open Clear_stack_strategy in
   [ ("loop", CSSloop); ("unrolled", CSSunrolled) ]
+
+(* -------------------------------------------------------------------- *)
+
+let rzm_all =
+  {
+    RZM.rzm_flags = true;
+    RZM.rzm_registers = true;
+    RZM.rzm_xregisters = true;
+  }
+
+let rzm_none =
+  {
+    RZM.rzm_flags = false;
+    RZM.rzm_registers = false;
+    RZM.rzm_xregisters = false;
+  }
+
+let rzm_regs =
+  { rzm_none with RZM.rzm_registers = true; }
+
+let rzm_xregs =
+  { rzm_none with RZM.rzm_xregisters = true; }
+
+let rzm_regs_flags =
+  { rzm_none with RZM.rzm_flags = true; RZM.rzm_registers = true; }
+
+let rzmodes =
+  [
+    "all", rzm_all;
+    "none", rzm_none;
+    "regs", rzm_regs;
+    "regs-flags", rzm_regs_flags;
+    "xregs", rzm_xregs;
+  ]

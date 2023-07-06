@@ -30,6 +30,7 @@ type f_annot = {
     stack_align           : wsize option;
     max_call_depth        : Z.t option;
     clear_stack           : (Clear_stack_strategy.cs_strategy * wsize option) option;
+    annot_rzm             : Register_zeroization_mode.rzmode option;
     f_user_annot          : annotations;
 }
 
@@ -40,5 +41,6 @@ let f_annot_empty = {
     stack_align           = None;
     max_call_depth        = None;
     clear_stack           = None;
+    annot_rzm             = None;
     f_user_annot          = [];
   }

@@ -15,7 +15,9 @@ CHECKCATS ?= \
 	arm-m4 \
 	arm-m4-print \
 	x86-64-szero-loop \
-	x86-64-szero-unrolled
+	x86-64-szero-unrolled \
+	x86-64-rzero-all \
+	x86-64-rzero-regs
 
 # --------------------------------------------------------------------
 DESTDIR  ?=

@@ -502,6 +502,18 @@ Proof.
   by exists b.
 Qed.
 
+Lemma mapM_singleton eT xT yT (f : xT -> result eT yT) xs ys :
+  mapM f xs = ok ys
+  -> mapM (fun x => Let y := f x in ok [:: y ]) xs
+      = ok (map (fun x => [:: x ]) ys).
+Proof.
+  elim: xs ys => [|x xs hind] /= ys.
+  - by move=> [?]; subst ys.
+
+  t_xrbindP=> ? -> ? h ?; subst ys.
+  by rewrite /= (hind _ h).
+Qed.
+
 Lemma mapM_take eT aT bT (f: aT → result eT bT) (xs: seq aT) ys n :
   mapM f xs = ok ys →
   mapM f (take n xs) = ok (take n ys).
@@ -1093,6 +1105,11 @@ Qed.
 
 Definition conc_map aT bT (f : aT -> seq bT) (l : seq aT) :=
   flatten (map f l).
+
+Lemma conc_map_singleton X Y (f : X -> Y) xs :
+  conc_map (map f) (map (fun x => [:: x ]) xs) = map f xs.
+Proof. rewrite /conc_map. elim: xs => [// | x xs hind]. by rewrite /= hind. Qed.
+
 
 (* -------------------------------------------------------------------------- *)
 (* Operators to build comparison                                              *)
@@ -1712,6 +1729,15 @@ Qed.
 Lemma notin_cons (T : eqType) (x y : T) (s : seq T) :
   (x \notin y :: s) = (x != y) && (x \notin s).
 Proof. by rewrite in_cons negb_or. Qed.
+
+Lemma filter_nil (X : eqType) p (xs : seq X) :
+  filter p xs = [::]
+  -> forall x, x \in xs -> ~~ p x.
+Proof.
+  move=> /eqP /negPn.
+  rewrite -has_filter.
+  by move=> /hasPn.
+Qed.
 
 (* Convert [ C |- uniq xs -> P ] into
    [ C, ? : x0 <> x1, ? : x0 <> x2, ... |- P ]. *)

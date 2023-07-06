@@ -9,8 +9,10 @@ Require Import
   arch_params_proof
   compiler_util
   expr
+  linear
   fexpr
   fexpr_sem
+  one_varmap
   psem
   psem_facts
   sem_one_varmap.
@@ -23,6 +25,10 @@ Require Import
   stack_alloc_proof
   clear_stack
   clear_stack_proof.
+Require
+  register_zeroization
+  register_zeroization_proof
+  register_zeroization_proof_utils.
 Require
   arch_sem.
 Require Import
@@ -192,9 +198,16 @@ Ltac t_arm_op :=
   rewrite ?zero_extend_u ?pword_of_wordE addn1;
   t_simpl_rewrites.
 
+Lemma arm_op_movi_eval_instr lp ls ii imm :
+  let: li := li_of_lopn_args ii (arm_op_movi x imm) in
+  let: wx := (wrepr reg_size imm)%R in
+  let: vm' := (lvm ls).[v_var x <- ok (pword_of_word wx)]%vmap in
+  eval_instr lp li ls = ok (next_vm_ls ls vm').
+Proof. t_arm_op. by rewrite addn1. Qed.
+
 Lemma arm_op_subi_eval_instr lp ls ii y imm wy :
   get_var (lvm ls) (v_var y) = ok (Vword wy)
-  -> let: li := li_of_copn_args ii (arm_op_subi x y imm) in
+  -> let: li := li_of_lopn_args ii (arm_op_subi x y imm) in
      let: wx' := (wy - wrepr reg_size imm)%R in
      let: vm' := (lvm ls).[v_var x <- ok (pword_of_word wx')]%vmap in
      eval_instr lp li ls = ok (next_vm_ls ls vm').
@@ -202,7 +215,7 @@ Proof. move=> hgety. t_arm_op. by rewrite wsub_wnot1. Qed.
 
 Lemma arm_op_align_eval_instr lp ls ii y al wy :
   get_var (lvm ls) (v_var y) = ok (Vword wy)
-  -> let: li := li_of_copn_args ii (arm_op_align x y al) in
+  -> let: li := li_of_lopn_args ii (arm_op_align x y al) in
      let: wx' := align_word al wy in
      let: vm' := (lvm ls).[v_var x <- ok (pword_of_word wx')]%vmap in
      eval_instr lp li ls = ok (next_vm_ls ls vm').
@@ -216,7 +229,7 @@ Qed.
 
 Lemma arm_op_mov_eval_instr lp ls ii y wy :
   get_var (lvm ls) (v_var y) = ok (Vword wy)
-  -> let: li := li_of_copn_args ii (arm_op_mov x y) in
+  -> let: li := li_of_lopn_args ii (arm_op_mov x y) in
      let: vm' := (lvm ls).[v_var x <- ok (pword_of_word wy)]%vmap in
      eval_instr lp li ls = ok (next_vm_ls ls vm').
 Proof. move=> hgety. by t_arm_op. Qed.
@@ -225,7 +238,7 @@ Lemma arm_op_str_off_eval_instr lp ls m' ii y off wx (wy : word reg_size) :
   get_var (lvm ls) (v_var x) = ok (Vword wx)
   -> get_var (lvm ls) (v_var y) = ok (Vword wy)
   -> write (lmem ls) (wx + wrepr Uptr off)%R wy = ok m'
-  -> let: li := li_of_copn_args ii (arm_op_str_off y x off) in
+  -> let: li := li_of_lopn_args ii (arm_op_str_off y x off) in
      eval_instr lp li ls = ok (next_mem_ls ls m').
 Proof. move=> hgety hgetx hwrite. by t_arm_op. Qed.
 
@@ -369,7 +382,7 @@ Qed.
 Lemma arm_cmd_load_large_imm_lsem lp fn s ii P Q xname imm :
   let: x := {| vname := xname; vtype := sword reg_size; |} in
   let: xi := {| v_var := x; v_info := dummy_var_info; |} in
-  let: lcmd := map (li_of_copn_args ii) (arm_cmd_load_large_imm xi imm) in
+  let: lcmd := map (li_of_lopn_args ii) (arm_cmd_load_large_imm xi imm) in
   is_linear_of lp fn (P ++ lcmd ++ Q)
   -> (0 <= imm < wbase reg_size)%Z
   -> exists vm',
@@ -423,7 +436,7 @@ Qed.
 Lemma arm_cmd_large_subi_lsem lp fn s ii P Q xname y imm wy :
   let: x := {| vname := xname; vtype := sword Uptr; |} in
   let: xi := {| v_var := x; v_info := dummy_var_info; |} in
-  let: lcmd := map (li_of_copn_args ii) (arm_cmd_large_subi xi y imm) in
+  let: lcmd := map (li_of_lopn_args ii) (arm_cmd_large_subi xi y imm) in
   is_linear_of lp fn (P ++ lcmd ++ Q)
   -> x <> v_var y
   -> get_var (evm s) (v_var y) = ok (Vword wy)
@@ -757,9 +770,9 @@ Proof.
   rewrite /set_up_sp_stack /= /arm_set_up_sp_stack hset_up /= -/vtmpi.
   rewrite map_cat /=.
   set cmd_large_subi := map _ (arm_cmd_large_subi _ _ _).
-  set i_align_tmp := li_of_copn_args _ (arm_op_align _ _ _).
-  set i_str_rsp := li_of_copn_args _ (arm_op_str_off _ _ _).
-  set i_mov_rsp := li_of_copn_args _ (arm_op_mov _ _).
+  set i_align_tmp := li_of_lopn_args _ (arm_op_align _ _ _).
+  set i_str_rsp := li_of_lopn_args _ (arm_op_str_off _ _ _).
+  set i_mov_rsp := li_of_lopn_args _ (arm_op_mov _ _).
   rewrite -catA.
   move=> hbody.
 
@@ -1266,6 +1279,118 @@ End ASM_GEN.
 
 
 (* ------------------------------------------------------------------------ *)
+(* Register zeroization hypotheses. *)
+
+Section REGISTER_ZEROIZATION.
+
+Import one_varmap.
+Import
+  register_zeroization
+  register_zeroization_proof
+  register_zeroization_proof_utils.
+
+Definition arm_h_rz_zeroized (x : var) : option value :=
+  match vtype x with
+  | sword ws => Some (@Vword ws 0%R)
+  | sbool => Some (Vbool (x \in [:: to_var ZF; to_var CF ]))
+  | _ => None
+  end.
+
+Notation invariant := (invariant arm_h_rz_zeroized).
+
+(* All lemmas are generalized to code rather than a single instruction. *)
+Notation zeroize_var_cmd err :=
+  (fun x => Let args := arm_zeroize_var err x in ok [:: args ])
+  (only parsing).
+
+Lemma arm_zeroize_varP err_register x :
+  get_lopn_invariant (zeroize_var_cmd err_register) invariant x.
+Proof.
+  move=> lp scs vm m fn pre pos args ii h hbody.
+
+  move: h.
+  move: x => [[|||[]] xname] //=.
+  set x := {| vname := xname; |}.
+  move=> [?]; subst args.
+
+  rewrite -cat1s in hbody.
+
+  eexists; eexists; eexists; split.
+  - apply: LSem_step.
+    rewrite /lsem1 /step -{1}(addn0 (size pre)).
+    rewrite (find_instr_skip hbody) /=.
+    rewrite arm_op_movi_eval_instr /=.
+    reflexivity.
+
+  split; first done; first done.
+  split=> y hy.
+
+  - move: hy => /sv_of_listP.
+    rewrite notin_cons.
+    move=> /andP [] /eqP hyx _.
+    by t_vm_get.
+
+  move: hy => /Sv_memP /sv_of_listP.
+  rewrite in_cons.
+  move=> /orP []; last done.
+  move=> /eqP ?; subst y.
+  rewrite /zeroized_on.
+  rewrite get_var_eq /=.
+  by rewrite wrepr0.
+Qed.
+
+Lemma arm_zeroize_flagsP :
+  zeroize_flags_spec arm_zeroize_flags arm_h_rz_zeroized.
+Proof.
+  move=> lp scs vm m fn ii err_flags xname P Q args.
+  move=> [?]; subst args.
+  set lflags := LLvar _ :: _.
+  move=> hx hbody.
+
+  eexists.
+
+  - apply: LSem_step.
+    rewrite /lsem1 /step -{1}(addn0 (size P)).
+    rewrite (find_instr_skip hbody) /=.
+    rewrite /eval_instr /=.
+    rewrite /sem_sopn /=.
+    rewrite /get_gvar /=.
+    move: hx.
+    rewrite /zeroized_on.
+    case: get_var => //= v.
+    move: v => [|||[]|] // w [?]; subst w.
+    rewrite /exec_sopn /=.
+    rewrite /of_estate /with_vm addn1 /=.
+    reflexivity.
+
+  split=> y; first last.
+
+  - move=> /Sv_memP /sv_of_listP.
+    rewrite /zeroized_on !in_cons.
+    by repeat (move=> /orP [/eqP -> |]; first by t_get_var).
+
+  move=> /sv_of_listP.
+  rewrite !notin_cons.
+  repeat (move=> /andP [] /eqP ?).
+  move=> _.
+  by t_vm_get.
+Qed.
+
+Lemma arm_h_rz_cmd_args :
+  h_rz_cmd_args_spec (rz_cmd_args arm_rzparams) arm_h_rz_zeroized.
+Proof.
+  exact: (naive_rz_cmd_argsP _ _ _ arm_zeroize_varP arm_zeroize_flagsP).
+Qed.
+
+Definition arm_hrzparams : h_register_zeroization_params arm_rzparams :=
+  {|
+    h_rz_cmd_args := arm_h_rz_cmd_args;
+  |}.
+
+End REGISTER_ZEROIZATION.
+
+
+(* ------------------------------------------------------------------------ *)
 (* Shared hypotheses. *)
 
 Definition arm_is_move_opP op vx v :
@@ -1301,6 +1426,7 @@ Definition arm_h_params : h_architecture_params arm_params :=
     hap_hlop := arm_hloparams;
     hap_hcsp := arm_hcsparams;
     hap_hagp := arm_hagparams;
+    hap_hrzp := arm_hrzparams;
     hap_hshp := arm_hshp;
     hap_is_move_opP := arm_is_move_opP;
   |}.

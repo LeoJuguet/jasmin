@@ -63,9 +63,9 @@ compiler/inline_proof.v
 compiler/jasmin_compiler.v
 compiler/lea.v
 compiler/lea_proof.v
-compiler/linear_util.v
 compiler/linearization.v
 compiler/linearization_proof.v
+compiler/linear_util.v
 compiler/lowering.v
 compiler/makeReferenceArguments.v
 compiler/makeReferenceArguments_proof.v
@@ -73,6 +73,10 @@ compiler/merge_varmaps.v
 compiler/merge_varmaps_proof.v
 compiler/propagate_inline.v
 compiler/propagate_inline_proof.v
+compiler/register_zeroization.v
+compiler/register_zeroization_utils.v
+compiler/register_zeroization_proof.v
+compiler/register_zeroization_proof_utils.v
 compiler/remove_globals.v
 compiler/remove_globals_proof.v
 compiler/slh_lowering.v
@@ -117,6 +121,7 @@ lang/one_varmap.v
 lang/psem_of_sem_proof.v
 lang/psem_facts.v
 lang/psem.v
+lang/register_zeroization_mode.v
 lang/pseudo_operator.v
 lang/sem.v
 lang/sem_one_varmap.v

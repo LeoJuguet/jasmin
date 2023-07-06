@@ -169,7 +169,7 @@ Definition clear_stack_lfd_body rsp lfd css ws : cexec lfundef :=
     assert (disjoint vars (Sv.union callee_saved (sv_of_list v_var lfd.(lfd_res))))
            (E.error (pp_box [:: pp_s "clash"]))
   in
-  ok (map_lfundef (fun c => c ++ cmd) lfd).
+  ok (map_lfundef_body (fun c => c ++ cmd) lfd).
 
 Definition clear_stack_lfd rsp fn (lfd : lfundef) : cexec lfundef :=
   let ws_align := lfd_align lfd in

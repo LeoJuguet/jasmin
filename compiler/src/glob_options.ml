@@ -42,6 +42,10 @@ let set_szero_strategy s =
 let szero_size = ref None
 let set_szero_size s = szero_size := Some (Annot.ws_of_string s)
 
+let rzero_mode = ref None
+let set_rzero_mode s =
+  rzero_mode := Some (List.assoc s rzmodes)
+
 type architecture =
   | X86_64
   | ARM_M4
@@ -163,6 +167,7 @@ let print_strings = function
   | Compiler.DeadCode_RegAllocation      -> "rallocd"  , "dead code after register allocation"
   | Compiler.Linearization               -> "linear"   , "linearization"
   | Compiler.ClearStack                  -> "stackzero", "stack zeroization"
+  | Compiler.RegisterZeroization         -> "regzero"  , "register zeroization"
   | Compiler.Tunneling                   -> "tunnel"   , "tunneling"
   | Compiler.Assembly                    -> "asm"      , "generation of assembly"
 
@@ -187,14 +192,15 @@ let stop_after_option p =
 
 let options =
   let szero_strategy_args =
-    let opts = List.map fst szero_strategies in
-    Arg.Symbol (opts, set_szero_strategy)
+    Arg.Symbol (List.map fst szero_strategies, set_szero_strategy)
   in
 
   let szero_size_args =
     let opts = List.map fst Annot.ws_strings in
     Arg.Symbol (opts, set_szero_size)
   in
+
+  let rzm_args = Arg.Symbol (List.map fst rzmodes, set_rzero_mode) in
 
   [
     "-version" , Arg.Set help_version  , "display version information about this compiler (and exits)";
@@ -252,6 +258,9 @@ let options =
     "-stack-zeroization-size",
       szero_size_args,
       ": override stack zeroization size for export functions";
+    "-register-zeroization",
+      rzm_args,
+      ": override register zeroization mode for export functions";
   ] @  List.map print_option Compiler.compiler_step_list @ List.map stop_after_option Compiler.compiler_step_list
 
 let usage_msg = "Usage : jasminc [option] filename"

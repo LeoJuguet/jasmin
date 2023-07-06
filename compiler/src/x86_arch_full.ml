@@ -32,7 +32,6 @@ module X86_core = struct
 
   let atoI = atoI x86_decl
   let asm_e = X86_extra.x86_extra atoI
-  let aparams = X86_params.x86_params atoI
 
   let not_saved_stack = (X86_params.x86_liparams atoI).lip_not_saved_stack
 
@@ -41,7 +40,7 @@ module X86_core = struct
 end
 
 
-module X86 (Lowering_params : X86_input) :
+module X86 (Arch_input : X86_input) :
   Arch_full.Core_arch
     with type reg = register
      and type regx = register_ext
@@ -53,6 +52,8 @@ module X86 (Lowering_params : X86_input) :
 
   include X86_core
 
-  include Lowering_params
+  let aparams = X86_params.x86_params atoI (Asm_gen.ovm_i x86_decl atoI Arch_input.call_conv)
+
+  include Arch_input
 
 end

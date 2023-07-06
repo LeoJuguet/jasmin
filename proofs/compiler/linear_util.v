@@ -1,4 +1,6 @@
-From mathcomp Require Import all_ssreflect all_algebra.
+From mathcomp Require Import
+  all_ssreflect
+  all_algebra.
 Require Import expr label linear.
 Require Import compiler_util.
 
@@ -14,7 +16,10 @@ Section ASM_OP.
 
 Context {asm_op} {asmop : asmOp asm_op}.
 
-Definition map_lfundef (f : lcmd -> lcmd) (lfd : lfundef) : lfundef :=
+Definition map_lfundef_body
+  (f : lcmd -> lcmd)
+  (lfd : lfundef) :
+  lfundef :=
   {|
     lfd_info := lfd_info lfd;
     lfd_align := lfd_align lfd;
@@ -70,3 +75,6 @@ Definition next_lprog_lbl (p : lprog) : label :=
   else xH.
 
 End ASM_OP.
+
+Notation with_lfd_body lfd lcmd :=
+  (map_lfundef_body (fun _ => lcmd) lfd) (only parsing).
