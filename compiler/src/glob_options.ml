@@ -46,6 +46,8 @@ let rzero_mode = ref None
 let set_rzero_mode s =
   rzero_mode := Some (List.assoc s rzmodes)
 
+let lfence_before_return = ref false
+
 type architecture =
   | X86_64
   | ARM_M4
@@ -261,6 +263,9 @@ let options =
     "-register-zeroization",
       rzm_args,
       ": override register zeroization mode for export functions";
+    "-lfence-before-return",
+      Arg.Set lfence_before_return,
+      ": insert an lfence before the return of export functions"
   ] @  List.map print_option Compiler.compiler_step_list @ List.map stop_after_option Compiler.compiler_step_list
 
 let usage_msg = "Usage : jasminc [option] filename"
