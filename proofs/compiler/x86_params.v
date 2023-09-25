@@ -285,85 +285,109 @@ Definition x86_clear_stack_loop_small (lbl : label) ws_align ws (max_stk_size : 
   (* tmp = rsp; *)
   let i0 := Lopn [:: LLvar tmpi ] (Ox86 (MOV U64)) [:: rvar rspi ] in
 
-  (* tmp &= - (wsize_size ws_align); *)
+  (* rsp &= - (wsize_size ws_align); *)
   let i1 :=
     Lopn
-      (flags_lexprs ++ [:: LLvar tmpi ])
+      (flags_lexprs ++ [:: LLvar rspi ])
       (Ox86 (AND U64))
-      [:: rvar tmpi; rconst U64 (- wsize_size ws_align)%Z ]
+      [:: rvar rspi; rconst U64 (- wsize_size ws_align)%Z ]
   in
 
-  (* off = -max_stk_size; *)
+  (* rsp -= max_stk_size *)
   let i2 :=
+    Lopn
+      (flags_lexprs ++ [:: LLvar rspi ])
+      (Ox86 (SUB U64))
+      [:: rvar rspi; rconst U64 max_stk_size%Z ]
+  in
+
+  (* off = max_stk_size; *)
+  let i3 :=
     Lopn
       [:: LLvar offi ]
       (Ox86 (MOV U64))
-      [:: rconst U64 (- max_stk_size)%Z ]
-  in
-
-  (* l1: *)
-  let i3 := Llabel InternalLabel lbl in
-
-  (* (ws)[tmp + off] = 0; *)
-  let i4 :=
-    Lopn [:: Store ws tmpi (Fvar offi) ] (Ox86 (MOV ws)) [:: rconst ws 0 ]
-  in
-
-  (* ?{zf}, off = #ADD(off, wsize_size ws); *)
-  let i5 :=
-    Lopn
-      (flags_lexprs ++ [:: LLvar offi ])
-      (Ox86 (ADD U64))
-      [:: rvar offi; rconst U64 (wsize_size ws) ]
-  in
-
-  (* if (!zf) goto l1 *)
-  let i6 := Lcond (Fapp1 Onot (Fvar zfi)) lbl in
-
-  map (MkLI dummy_instr_info) [:: i0; i1; i2; i3; i4; i5; i6 ].
-
-(* we read rsp first, so that we are sure that we don't modify it ; otherwise,
-   we would have to add hypotheses like rsp <> XMM2 *)
-Definition x86_clear_stack_loop_large (lbl : label) ws_align ws (max_stk_size : Z) : lcmd :=
-  (* tmp = rsp; *)
-  let i1 := Lopn [:: LLvar tmpi ] (Ox86 (MOV U64)) [:: rvar rspi ] in
-
-  (* ymm = #set0_ws(); *)
-  let i0 := Lopn [:: LLvar vlri ] (Oasm (ExtOp (Oset0 ws))) [::] in
-
-  (* tmp &= - (wsize_size ws_align); *)
-  let i2 :=
-    Lopn
-      (flags_lexprs ++ [:: LLvar tmpi ])
-      (Ox86 (AND U64))
-      [:: rvar tmpi; rconst U64 (- wsize_size ws_align)%Z ]
-  in
-
-  (* off = -max_stk_size; *)
-  let i3 :=
-    Lopn [:: LLvar offi ] (Ox86 (MOV U64)) [:: rconst U64 (- max_stk_size)%Z ]
+      [:: rconst U64 max_stk_size ]
   in
 
   (* l1: *)
   let i4 := Llabel InternalLabel lbl in
 
-  (* (ws)[tmp + off] = ymm; *)
+  (* ?{zf}, off = #SUB(off, wsize_size ws); *)
   let i5 :=
-    Lopn [:: Store ws tmpi (Fvar offi) ] (Ox86 (VMOVDQU ws)) [:: rvar vlri ]
-  in
-
-  (* ?{zf}, off = #ADD(off, wsize_size ws); *)
-  let i6 :=
     Lopn
       (flags_lexprs ++ [:: LLvar offi ])
-      (Ox86 (ADD U64))
+      (Ox86 (SUB U64))
       [:: rvar offi; rconst U64 (wsize_size ws) ]
+  in
+
+  (* (ws)[rsp + off] = 0; *)
+  let i6 :=
+    Lopn [:: Store ws rspi (Fvar offi) ] (Ox86 (MOV ws)) [:: rconst ws 0 ]
   in
 
   (* if (!zf) goto l1 *)
   let i7 := Lcond (Fapp1 Onot (Fvar zfi)) lbl in
 
-  map (MkLI dummy_instr_info) [:: i1; i0; i2; i3; i4; i5; i6; i7 ].
+  (* rsp = tmp *)
+  let i8 :=
+    Lopn [:: LLvar rspi ] (Ox86 (MOV U64)) [:: rvar tmpi ] in
+
+  map (MkLI dummy_instr_info) [:: i0; i1; i2; i3; i4; i5; i6; i7; i8 ].
+
+(* we read rsp first, so that we are sure that we don't modify it ; otherwise,
+   we would have to add hypotheses like rsp <> XMM2 *)
+Definition x86_clear_stack_loop_large (lbl : label) ws_align ws (max_stk_size : Z) : lcmd :=
+  (* tmp = rsp; *)
+  let i0 := Lopn [:: LLvar tmpi ] (Ox86 (MOV U64)) [:: rvar rspi ] in
+
+  (* ymm = #set0_ws(); *)
+  let i1 := Lopn [:: LLvar vlri ] (Oasm (ExtOp (Oset0 ws))) [::] in
+
+  (* rsp &= - (wsize_size ws_align); *)
+  let i2 :=
+    Lopn
+      (flags_lexprs ++ [:: LLvar rspi ])
+      (Ox86 (AND U64))
+      [:: rvar rspi; rconst U64 (- wsize_size ws_align)%Z ]
+  in
+
+  (* rsp -= max_stk_size *)
+  let i3 :=
+    Lopn
+      (flags_lexprs ++ [:: LLvar rspi ])
+      (Ox86 (SUB U64))
+      [:: rvar rspi; rconst U64 max_stk_size ]
+  in
+
+  (* off = max_stk_size; *)
+  let i4 :=
+    Lopn [:: LLvar offi ] (Ox86 (MOV U64)) [:: rconst U64 max_stk_size ]
+  in
+
+  (* l1: *)
+  let i5 := Llabel InternalLabel lbl in
+
+  (* ?{zf}, off = #SUB(off, wsize_size ws); *)
+  let i6 :=
+    Lopn
+      (flags_lexprs ++ [:: LLvar offi ])
+      (Ox86 (SUB U64))
+      [:: rvar offi; rconst U64 (wsize_size ws) ]
+  in
+
+  (* (ws)[rsp + off] = ymm; *)
+  let i7 :=
+    Lopn [:: Store ws rspi (Fvar offi) ] (Ox86 (VMOVDQU ws)) [:: rvar vlri ]
+  in
+
+  (* if (!zf) goto l1 *)
+  let i8 := Lcond (Fapp1 Onot (Fvar zfi)) lbl in
+
+  (* rsp = tmp *)
+  let i9 :=
+    Lopn [:: LLvar rspi ] (Ox86 (MOV U64)) [:: rvar tmpi ] in
+
+  map (MkLI dummy_instr_info) [:: i1; i0; i2; i3; i4; i5; i6; i7; i8; i9 ].
 
 Definition x86_clear_stack_loop lbl ws_align ws max_stk_size :=
   if (ws <= U64)%CMP then x86_clear_stack_loop_small lbl ws_align ws max_stk_size
@@ -373,25 +397,37 @@ Definition x86_clear_stack_unrolled_small ws_align ws (max_stk_size : Z) : lcmd 
   (* tmp = rsp; *)
   let i0 := Lopn [:: LLvar tmpi ] (Ox86 (MOV U64)) [:: rvar rspi ] in
 
-  (* tmp &= - (wsize_size ws_align); *)
+  (* rsp &= - (wsize_size ws_align); *)
   let i1 :=
     Lopn
-      (flags_lexprs ++ [:: LLvar tmpi ])
+      (flags_lexprs ++ [:: LLvar rspi ])
       (Ox86 (AND U64))
-      [:: rvar tmpi; rconst U64 (- wsize_size ws_align)%Z ]
+      [:: rvar rspi; rconst U64 (- wsize_size ws_align)%Z ]
   in
 
-  (* (ws)[tmp + off] = 0; *)
+  (* rsp -= max_stk_size *)
+  let i2 :=
+    Lopn
+      (flags_lexprs ++ [:: LLvar rspi ])
+      (Ox86 (SUB U64))
+      [:: rvar rspi; rconst U64 max_stk_size%Z ]
+  in
+
+  (* (ws)[rsp + off] = 0; *)
   let f off :=
     Lopn
-      [:: Store ws tmpi (fconst U64 (- off)) ]
+      [:: Store ws rspi (fconst U64 off) ]
       (Ox86 (MOV ws))
       [:: rconst ws 0 ]
   in
 
-  let offs := map (fun x => x * wsize_size ws)%Z (rev (ziota 1 (max_stk_size / wsize_size ws))) in
+  let offs := map (fun x => x * wsize_size ws)%Z (rev (ziota 0 (max_stk_size / wsize_size ws))) in
 
-  map (MkLI dummy_instr_info) [:: i0, i1 & map f offs].
+  (* rsp = tmp *)
+  let i3 :=
+    Lopn [:: LLvar rspi ] (Ox86 (MOV U64)) [:: rvar tmpi ] in
+
+  map (MkLI dummy_instr_info) [:: i0, i1, i2 & map f offs ++ [:: i3]].
 
 Definition x86_clear_stack_unrolled_large ws_align ws (max_stk_size : Z) : lcmd :=
   (* tmp = rsp; *)
@@ -400,25 +436,37 @@ Definition x86_clear_stack_unrolled_large ws_align ws (max_stk_size : Z) : lcmd 
   (* ymm = #set0_ws(); *)
   let i0 := Lopn [:: LLvar vlri ] (Oasm (ExtOp (Oset0 ws))) [::] in
 
-  (* tmp &= - (wsize_size ws_align); *)
+  (* rsp &= - (wsize_size ws_align); *)
   let i2 :=
     Lopn
-      (flags_lexprs ++ [:: LLvar tmpi ])
+      (flags_lexprs ++ [:: LLvar rspi ])
       (Ox86 (AND U64))
-      [:: rvar tmpi; rconst U64 (- wsize_size ws_align)%Z ]
+      [:: rvar rspi; rconst U64 (- wsize_size ws_align)%Z ]
   in
 
-  (* (ws)[tmp + off] = ymm; *)
+  (* rsp -= max_stk_size *)
+  let i3 :=
+    Lopn
+      (flags_lexprs ++ [:: LLvar rspi ])
+      (Ox86 (SUB U64))
+      [:: rvar rspi; rconst U64 max_stk_size%Z ]
+  in
+
+  (* (ws)[rsp + off] = ymm; *)
   let f off :=
     Lopn
-      [:: Store ws tmpi (fconst U64 (- off)) ]
+      [:: Store ws rspi (fconst U64 off) ]
       (Ox86 (VMOVDQU ws))
       [:: rvar vlri ]
   in
 
-  let offs := map (fun x => x * wsize_size ws)%Z (rev (ziota 1 (max_stk_size / wsize_size ws))) in
+  let offs := map (fun x => x * wsize_size ws)%Z (rev (ziota 0 (max_stk_size / wsize_size ws))) in
 
-  map (MkLI dummy_instr_info) [:: i1, i0, i2 & map f offs].
+  (* rsp = tmp *)
+  let i4 :=
+    Lopn [:: LLvar rspi ] (Ox86 (MOV U64)) [:: rvar tmpi ] in
+
+  map (MkLI dummy_instr_info) [:: i1, i0, i2, i3 & map f offs ++ [:: i4]].
 
 End RSP.
 

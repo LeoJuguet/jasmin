@@ -52,7 +52,8 @@ Record h_clear_stack_params {asm_op syscall_state : Type} {spp : SemPexprParams 
         lsem lp (Lstate scs m vm fn (size lc))
                 (Lstate scs m' vm' fn (size lc+size cmd)),
         vm = vm' [\ write_c cmd],
-        validw m =2 validw m' &
+        validw m =2 validw m',
+        get_var vm' rsp = ok (Vword ptr) &
         
         (forall p, disjoint_zrange top max_stk_size p (wsize_size U8) ->
           read m p U8 = read m' p U8) /\

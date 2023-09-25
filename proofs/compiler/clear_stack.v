@@ -134,7 +134,7 @@ Lemma test lp c : local_code c ->
   vm = vm' [\ write_c c].
 *)
 (* TODO : get rid of WArray.PointerZ ! *)
-Definition clear_stack_lfd_body rsp lfd css ws : cexec lfundef :=
+Definition clear_stack_lfd_body (rsp:var_i) lfd css ws : cexec lfundef :=
   let lbl := next_lfd_lbl lfd in
   let ws_align := lfd_align lfd in
   let frame_size := lfd_frame_size lfd in
@@ -166,7 +166,7 @@ Definition clear_stack_lfd_body rsp lfd css ws : cexec lfundef :=
   Let cmd := clear_stack_cmd css rsp lbl ws_align ws used_stk in
   Let _ :=
     let vars := write_c cmd in
-    assert (disjoint vars (Sv.union callee_saved (sv_of_list v_var lfd.(lfd_res))))
+    assert (disjoint vars (Sv.union (Sv.remove rsp callee_saved) (sv_of_list v_var lfd.(lfd_res))))
            (E.error (pp_box [:: pp_s "clash"]))
   in
   ok (map_lfundef_body (fun c => c ++ cmd) lfd).
