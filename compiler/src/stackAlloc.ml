@@ -115,6 +115,91 @@ let pp_oracle up fmt (saos, sao_infos) =
     (pp_list "@;" pp_slot) ao_global_alloc
     (pp_list "@;" pp_stack_alloc) fs
 
+let json_of_slot ((x, ws), ofs) =
+  `Assoc [
+    ("offset", `Intlit (Z.to_string (Conv.z_of_cz ofs)));
+    ("var", `String (Format.asprintf "%a" pp_var_ty (Conv.var_of_cvar x)));
+    ("alignment", `String (string_of_ws ws));
+  ]
+
+let json_of_sao (sao, sao_info) : Yojson.Safe.t =
+  let { extra_padding; frame_size } = sao_info in
+  let open Stack_alloc in
+  let sao_size = Conv.z_of_cz sao.sao_size in
+  let sao_extra_size = Conv.z_of_cz sao.sao_extra_size in
+  let sao_max_size_used = Conv.z_of_cz sao.sao_max_size_used in
+  let max_alignment_padding =
+    if is_RAnone sao.sao_return_address then size_of_ws sao.sao_align - 1 else 0
+  in
+  let json_of_extra =
+    `Assoc [
+      ("total", `Intlit (Z.to_string sao_extra_size));
+      ("data", `Intlit (Z.to_string (Z.sub sao_extra_size extra_padding)));
+      ("padding", `Intlit (Z.to_string extra_padding));
+    ]
+  in
+  let json_of_frame =
+    `Assoc [
+      ("total", `Intlit (Z.to_string frame_size));
+      ("local stack vars", `Intlit (Z.to_string sao_size));
+      ("extra", `Intlit (Z.to_string sao_extra_size));
+      ("padding", `Intlit (Z.to_string Z.(frame_size - sao_size - sao_extra_size)))
+    ]
+  in
+  let json_of_max_size_used =
+    `Assoc [
+      ("total", `Intlit (Z.to_string sao_max_size_used));
+      ("frame size", `Intlit (Z.to_string frame_size));
+      ("callees", `Intlit (Z.to_string (Z.sub sao_max_size_used frame_size)));
+    ]
+  in
+  let json_of_max_size =
+    let max_size = Z.add sao_max_size_used (Z.of_int max_alignment_padding) in
+    `Assoc [
+      ("total", `Intlit (Z.to_string max_size));
+      ("max size used", `Intlit (Z.to_string sao_max_size_used));
+      ("max alignment padding", `Int max_alignment_padding);
+    ]
+  in
+  `Assoc [
+    ("export", `Bool (is_RAnone sao.sao_return_address));
+    ("alignment", `String (string_of_ws sao.sao_align));
+    ("size", `Intlit (Z.to_string sao_size));
+    ("extra size", json_of_extra);
+    ("frame size", json_of_frame);
+    ("max used size", json_of_max_size_used);
+    ("max size", json_of_max_size);
+    ("max call depth", `Intlit (Z.to_string (Conv.z_of_cz sao.sao_max_call_depth)));
+  ](*
+  params =@;<2 2>@[<v>%a@]@;return = @[<hov>%a@]@;slots =@;<2 2>@[<v>%a@]@;alloc= @;<2 2>@[<v>%a@]@;saved register = @[<hov>%a@]@;saved stack = %a@;return address = %a
+    (pp_list "@;" pp_param_info) sao.sao_params
+    (pp_list "@;" pp_return) sao.sao_return
+    (pp_list "@;" pp_slot) sao.sao_slots
+    (pp_list "@;" pp_alloc) sao.sao_alloc
+    (pp_list "@;" (Printer.pp_to_save ~debug:true)) sao.sao_to_save
+    (Printer.pp_saved_stack ~debug:true) sao.sao_rsp
+    (Printer.pp_return_address ~debug:true) sao.sao_return_address *)
+
+let json_of_oracle up (saos, sao_infos) =
+  let Compiler.{ ao_globals; ao_global_alloc; ao_stack_alloc } = saos in
+  let json_of_globals global =
+    `Intlit (Z.to_string (Conv.z_of_word U8 global))
+  in
+  let json_of_stack_alloc f : Yojson.Safe.t =
+    let sao = ao_stack_alloc f.f_name in
+    let sao_info = sao_infos f.f_name in
+    `Assoc [
+      ("function name", `String f.f_name.fn_name);
+      ("description", json_of_sao (sao, sao_info));
+    ]
+  in
+  let _, fs = Conv.prog_of_cuprog up in
+  `Assoc [
+    ("global data", `List (List.map json_of_globals ao_globals));
+    ("global slots", `List (List.map json_of_slot ao_global_alloc));
+    ("stack alloc", `List (List.map json_of_stack_alloc fs));
+  ]
+
 module StackAlloc (Arch: Arch_full.Arch) = struct
 
 module Regalloc = Regalloc (Arch)
@@ -392,6 +477,10 @@ let memory_analysis pp_err ~debug up =
 "(* -------------------------------------------------------------------- *)@.";
     Format.eprintf "(* Final results of the stack allocation oracle *)@.@.";
     Format.eprintf "%a@.@.@." (pp_oracle up) (saos, sao_infos)
+  end;
+  if !Glob_options.print_stack_alloc_json then begin
+    let sao_infos fn = Hf.find infos_tbl fn in
+    Format.eprintf "%a@." (Yojson.Safe.pretty_print ~std:true) (json_of_oracle up (saos, sao_infos))
   end;
 
   saos
