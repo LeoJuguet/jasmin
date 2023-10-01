@@ -7,6 +7,7 @@ Require Import
   compiler_util
   expr
   fexpr
+  label
   one_varmap.
 Require Import
   clear_stack
@@ -76,6 +77,7 @@ Definition arm_cmd_load_large_imm (x : var_i) (imm : Z) : seq fopn_args :=
    loading it into a register if needed.
    In symbols,
        R[x] := R[y] <+> imm
+   Precondition: [x <> y].
  *)
 Definition arm_cmd_large_arith_imm
   (on_reg : var_i -> var_i -> var_i -> fopn_args)
@@ -85,6 +87,7 @@ Definition arm_cmd_large_arith_imm
   seq fopn_args :=
   arm_cmd_load_large_imm x imm ++ [:: on_reg x y x ].
 
+(* Precondition: [x <> y]. *)
 Definition arm_cmd_large_subi (x y : var_i) (imm : Z) : seq fopn_args :=
   arm_cmd_large_arith_imm arm_op_sub arm_op_subi x y imm.
 
@@ -319,11 +322,139 @@ Definition arm_agparams : asm_gen_params :=
     agp_assemble_cond := assemble_cond;
   |}.
 
-(* FIXME: put real values here *)
-Definition arm_csparams : clear_stack_params :=
+
+(* ------------------------------------------------------------------------ *)
+(* Stack zeroization parameters. *)
+
+Section STACK_ZEROIZATION.
+
+Section WITH_PARAMS.
+
+Context
+  (vrsp : var_i)
+  (lbl : label)
+  (alignment ws : wsize)
+  (max_stk_size : Z)
+.
+
+Let vsaved_sp := mk_var_i (to_var R02).
+Let voff := mk_var_i (to_var R03).
+Let vzero := mk_var_i (to_var R12).
+Let vzf := mk_var_i (to_var ZF).
+Let leflags := [seq LLvar (mk_var_i (to_var f)) | f <- rflags ].
+
+Notation rvar := (fun v => Rexpr (Fvar v)) (only parsing).
+Notation rconst := (fun ws imm => Rexpr (fconst ws imm)) (only parsing).
+
+(* For both strategies we need to initialize:
+   - [saved_sp] to save [SP]
+   - [off] to offset from [SP] to already zeroized region
+   - [SP] to align and point to the end of the region to zeroize
+   - [zero] to zero
+   Since we can't align [SP] directly, we use [zero] as a scratch register.
+   This is the implementation:
+    saved_sp = sp
+    off:lo = max_stk_size:lo
+    off:hi = max_stk_size:hi
+    zero = sp
+    zero &= - (wsize_size alignment)
+    sp = zero
+    sp -= off
+    zero = 0
+*)
+Definition sz_init : lcmd :=
+  let args :=
+    arm_op_mov vsaved_sp vrsp
+    :: arm_cmd_load_large_imm voff max_stk_size
+    ++ arm_op_mov vzero vrsp
+    :: arm_op_align vzero vzero alignment
+    :: arm_op_mov vrsp vzero
+    :: arm_op_sub vrsp vrsp voff
+    :: [:: arm_op_movi vzero 0 ]
+  in
+  map (li_of_lopn_args dummy_instr_info) args.
+
+Definition store_zero (off : fexpr) : linstr_r :=
+  if store_mn_of_wsize ws is Some mn
+    then
+      let current := Store ws vrsp off in
+      let op := ARM_op mn default_opts in
+      Lopn [:: current ] (Oarm op) [:: rvar vzero ]
+    else Lalign. (* Absurd case. *)
+
+(* Implementation:
+l1:
+    ?{zf}, off = #SUBS(off, wsize_size ws)
+    (ws)[rsp + off] = zero
+    IF (!zf) GOTO l1
+*)
+Definition sz_loop : lcmd :=
+  let dec_off :=
+    let opts :=
+      {| set_flags := true; is_conditional := false; has_shift := None; |}
+    in
+    let op := ARM_op SUB opts in
+    let dec := rconst U64 (wsize_size ws) in
+    Lopn (leflags ++ [:: LLvar voff ]) (Oarm op) [:: rvar voff; dec ]
+  in
+  let irs :=
+    [:: Llabel InternalLabel lbl
+      ; dec_off
+      ; store_zero (Fvar voff)
+      ; Lcond (Fapp1 Onot (Fvar vzf)) lbl
+    ]
+  in
+  map (MkLI dummy_instr_info) irs.
+
+Definition restore_sp :=
+  [:: li_of_lopn_args dummy_instr_info (arm_op_mov vrsp vsaved_sp) ].
+
+Definition stack_zero_loop : lcmd := sz_init ++ sz_loop ++ restore_sp.
+
+(* Implementation:
+    (ws)[rsp + 0] = zero
+    (ws)[rsp + wsize_size ws] = zero
+    ...
+    (ws)[rsp + max_stk_size / wsize_size ws] = zero
+*)
+Definition sz_unrolled : lcmd :=
+  let rn := rev (ziota 0 (max_stk_size / wsize_size ws)) in
+  [seq MkLI dummy_instr_info (store_zero (fconst reg_size off)) | off <- rn ].
+
+Definition stack_zero_unrolled : lcmd := sz_init ++ sz_unrolled ++ restore_sp.
+
+End WITH_PARAMS.
+
+Definition stack_zeroization_cmd
+  (css : cs_strategy)
+  (rsp : var_i)
+  (lbl : label)
+  (ws_align ws : wsize)
+  (max_stk_size : Z) :
+  cexec lcmd :=
+  let msg := "Stack zeroization size not supported in ARMv7"%string in
+  let err :=
+    {|
+      pel_msg := compiler_util.pp_s msg;
+      pel_fn := None;
+      pel_fi := None;
+      pel_ii := None;
+      pel_vi := None;
+      pel_pass := Some "stack zeroization"%string;
+      pel_internal := false;
+  |}
+  in
+  Let _ := assert (ws <= U32)%CMP err in
+  match css with
+  | CSSloop => ok (stack_zero_loop rsp lbl ws_align ws max_stk_size)
+  | CSSunrolled => ok (stack_zero_unrolled rsp ws_align ws max_stk_size)
+  end.
+
+End STACK_ZEROIZATION.
+
+Definition arm_szparams : clear_stack_params :=
   {|
-    cs_clear_stack_cmd := fun _ _ _ _ _ _ =>
-      Error (clear_stack.E.error (compiler_util.pp_s "arm not supported"))
+    cs_clear_stack_cmd := stack_zeroization_cmd;
   |}.
 
 
@@ -387,7 +518,7 @@ Definition arm_params
     ap_lip := arm_liparams;
     ap_lop := arm_loparams;
     ap_agp := arm_agparams;
-    ap_csp := arm_csparams;
+    ap_csp := arm_szparams;
     ap_rzp := arm_rzparams;
     ap_shp := arm_shparams;
     ap_is_move_op := arm_is_move_op;

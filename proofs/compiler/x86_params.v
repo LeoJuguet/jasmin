@@ -267,14 +267,12 @@ Let vlocal {t T} {_ : ToString t T} {_ : ToIdent T} (x : T) : gvar :=
 
 Let tmp : gvar := vlocal RSI.
 Let off : gvar := vlocal RDI.
-Let r   : gvar := vlocal RCX.
 Let vlr : gvar := vlocal XMM2.
 
 Let rsp : gvar := mk_lvar rspi.
 Let zf : gvar := vlocal ZF.
 Let tmpi : var_i := gv tmp.
 Let offi : var_i := gv off.
-Let ri   : var_i := gv r.
 Let vlri : var_i := gv vlr.
 Let zfi : var_i := gv zf.
 

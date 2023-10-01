@@ -1,3 +1,4 @@
+#[clearstack=loop, clearsize=u32]
 export
 fn random32() -> reg u32 {
   stack u8[4] s;

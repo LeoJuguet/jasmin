@@ -324,7 +324,7 @@ Lemma register_zeroization_lfd_invariants fn lfd lfd' :
        , lfd_res lfd' = lfd_res lfd
        , lfd_export lfd' = lfd_export lfd
        , lfd_callee_saved lfd' = lfd_callee_saved lfd
-       & lfd_total_stack lfd' = lfd_total_stack lfd
+       & lfd_used_stack lfd' = lfd_used_stack lfd
      ].
 Proof.
   rewrite /register_zeroization_lfd.
