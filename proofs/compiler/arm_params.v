@@ -356,8 +356,7 @@ Notation rconst := (fun ws imm => Rexpr (fconst ws imm)) (only parsing).
     saved_sp = sp
     off:lo = max_stk_size:lo
     off:hi = max_stk_size:hi
-    zero = sp
-    zero &= - (wsize_size alignment)
+    zero = saved_sp & - (wsize_size alignment)
     sp = zero
     sp -= off
     zero = 0
@@ -366,8 +365,7 @@ Definition sz_init : lcmd :=
   let args :=
     arm_op_mov vsaved_sp vrsp
     :: arm_cmd_load_large_imm voff max_stk_size
-    ++ arm_op_mov vzero vrsp
-    :: arm_op_align vzero vzero alignment
+    ++ arm_op_align vzero vsaved_sp alignment
     :: arm_op_mov vrsp vzero
     :: arm_op_sub vrsp vrsp voff
     :: [:: arm_op_movi vzero 0 ]

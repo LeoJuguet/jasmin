@@ -110,22 +110,9 @@ Definition vm_of_init
     .[v_var vrsp <- ok (pword_of_word wrsp')]
     .[v_var vzero <- ok (pword_of_word 0%R)]%vmap.
 
-
-Lemma cat_cons_cat {T} {p q r} {x : T} :
-  p ++ x :: q ++ r = (p ++ x :: q) ++ r.
-Proof. by rewrite -!catA. Qed.
-
 Lemma cat_cons1 {T} {p q} {x : T} :
   p ++ x :: q = (p ++ [:: x ]) ++ q.
 Proof. by rewrite /= -catA. Qed.
-
-Lemma cat_cons2 {T} {p q} {x0 x1 : T} :
-  p ++ x0 :: x1 :: q = (p ++ [:: x0; x1 ]) ++ q.
-Proof. by rewrite /= -catA. Qed.
-
-Lemma arm_cmd_load_large_imm_size x z :
-  size (arm_cmd_load_large_imm x z) = 2.
-Proof. rewrite /arm_cmd_load_large_imm. by move: (Z.div_eucl _ _) => []. Qed.
 
 Lemma help :
   [/\ v_var vrsp <> v_var vsaved_sp
@@ -152,17 +139,14 @@ Proof.
   rewrite /= map_cat /= -catA.
   set isave_sp := li_of_lopn_args _ (arm_op_mov _ _).
   set iload_off := map _ (arm_cmd_load_large_imm _ _).
-  set iload_sp := li_of_lopn_args _ (arm_op_mov _ _).
   set ialign := li_of_lopn_args _ (arm_op_align _ _ _).
   set istore_sp := li_of_lopn_args _ (arm_op_mov _ _).
   set isub_sp := li_of_lopn_args _ (arm_op_sub _ _ _).
   set izero := li_of_lopn_args _ (arm_op_movi _ _).
-
   move=> hbody hmax hgetrsp.
 
   set wmax := wrepr reg_size max_stk_size.
   set wrsp' := (align_word al wrsp - wmax)%R.
-
   set vm0 := (evm s).[v_var vsaved_sp <- ok (pword_of_word wrsp)]%vmap.
 
   rewrite cat_cons1 in hbody.
@@ -184,21 +168,12 @@ Proof.
     rewrite catA in hbody.
     apply: lsem_step.
     + rewrite /lsem1 /step (find_instrE hbody) oseq.onth_cat.
-      rewrite !size_cat size_map arm_cmd_load_large_imm_size ltnn subnn /=.
-      rewrite /eval_instr /= (get_var_eq_except _ hvm1);
-        last by move=> /Sv.singleton_spec.
-      rewrite get_var_neq; last by auto.
-      rewrite hgetrsp /= /exec_sopn /= truncate_word_u /=.
-      rewrite /of_estate /with_vm /= pword_of_wordE.
-      reflexivity.
-
-    rewrite (cat_cons1 (x := iload_sp)) in hbody.
-    apply: lsem_step.
-    + rewrite /lsem1 /step (find_instrE hbody) oseq.onth_cat.
-      rewrite !size_cat size_map arm_cmd_load_large_imm_size /=.
-      rewrite -!addnA /= -addnS ltnn subnn /=.
-Opaque wsize_size.
-      rewrite /eval_instr /= get_var_eq /exec_sopn /= !truncate_word_u /=.
+      rewrite !size_cat size_map /=.
+      rewrite ltnn subnn.
+      Opaque wsize_size.
+      rewrite /eval_instr /=.
+      rewrite (get_var_eq_except _ hvm1); last by move=> /Sv.singleton_spec.
+      rewrite get_var_eq /= /exec_sopn /= !truncate_word_u /=.
       rewrite /of_estate /with_vm /=.
       rewrite wrepr_wnot ZlnotE Z.sub_1_r Z.add_1_r Z.succ_pred.
       rewrite -/(align_word al wrsp) pword_of_wordE.
@@ -207,8 +182,7 @@ Opaque wsize_size.
     rewrite (cat_cons1 (x := ialign)) in hbody.
     apply: lsem_step.
     + rewrite /lsem1 /step (find_instrE hbody) oseq.onth_cat.
-      rewrite !size_cat size_map arm_cmd_load_large_imm_size /=.
-      rewrite -!addnA /= -addnS ltnn subnn /=.
+      rewrite !size_cat size_map /= !addn1 ltnn subnn.
       rewrite /eval_instr /= get_var_eq /exec_sopn /= !truncate_word_u /=.
       rewrite /of_estate /with_vm /= pword_of_wordE.
       reflexivity.
@@ -216,12 +190,9 @@ Opaque wsize_size.
     rewrite (cat_cons1 (x := istore_sp)) in hbody.
     apply: lsem_step.
     + rewrite /lsem1 /step (find_instrE hbody) oseq.onth_cat.
-      rewrite !size_cat size_map arm_cmd_load_large_imm_size /=.
-      rewrite -!addnA /= -addnS ltnn subnn /=.
+      rewrite !size_cat size_map !addn1 ltnn subnn.
       rewrite /eval_instr /= get_var_eq /exec_sopn /=.
-      rewrite get_var_neq; last by auto.
-      rewrite get_var_neq; last by auto.
-      rewrite get_var_neq; last by auto.
+      t_get_var.
       rewrite hgetoff /= !truncate_word_u /=.
       rewrite /of_estate /with_vm /= pword_of_wordE.
       reflexivity.
@@ -229,15 +200,14 @@ Opaque wsize_size.
     rewrite (cat_cons1 (x := isub_sp)) in hbody.
     apply: lsem_step.
     + rewrite /lsem1 /step (find_instrE hbody) oseq.onth_cat.
-      rewrite !size_cat size_map arm_cmd_load_large_imm_size /=.
-      rewrite -!addnA /= -addnS ltnn subnn /=.
+      rewrite !size_cat size_map !addn1 ltnn subnn.
       rewrite /eval_instr /= /exec_sopn /= !truncate_word_u /=.
       rewrite /of_estate /with_vm /= pword_of_wordE.
       reflexivity.
 
     rewrite /of_estate /=.
-    rewrite size_cat size_map arm_cmd_load_large_imm_size /=.
-    rewrite -addnS addn2 -addn1.
+    rewrite size_cat size_map /=.
+    rewrite -addn4 -addnA addSnnS.
     exact: rt_refl.
 
   clear - hgetrsp hgetoff hvm1.
