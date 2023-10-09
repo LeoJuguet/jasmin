@@ -480,12 +480,7 @@ module Printer (BP:BPrinter) = struct
         pp_instrs name fmt d.asm_fd_body;
   
         if export then
-          let l =
-            if !Glob_options.lfence_before_return then [`Instr ("lfence", [])]
-            else []
-          in
-          let l = l @ [`Instr ("ret", [])] in
-          pp_gens fmt l
+        pp_gens fmt [`Instr ("ret", [])]
       ) asm.asm_funcs;
     pp_glob_data fmt asm.asm_globs
   
