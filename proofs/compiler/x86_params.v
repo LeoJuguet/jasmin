@@ -391,6 +391,9 @@ Definition x86_clear_stack_loop lbl ws_align ws max_stk_size :=
   if (ws <= U64)%CMP then x86_clear_stack_loop_small lbl ws_align ws max_stk_size
   else x86_clear_stack_loop_large lbl ws_align ws max_stk_size.
 
+Definition x86_clear_stack_loopSCT lbl ws_align ws max_stk_size :=
+  x86_clear_stack_loop lbl ws_align ws max_stk_size ++ [:: MkLI dummy_instr_info (Lopn [::] (Ox86 LFENCE) [::]) ].
+
 Definition x86_clear_stack_unrolled_small ws_align ws (max_stk_size : Z) : lcmd :=
   (* tmp = rsp; *)
   let i0 := Lopn [:: LLvar tmpi ] (Ox86 (MOV U64)) [:: rvar rspi ] in
@@ -476,6 +479,7 @@ Definition x86_clear_stack_cmd
   (css : cs_strategy) rsp (lbl : label) ws_align ws (max_stk_size : Z) : cexec lcmd :=
   match css with
   | CSSloop => ok (x86_clear_stack_loop rsp lbl ws_align ws max_stk_size)
+  | CSSloopSCT => ok (x86_clear_stack_loopSCT rsp lbl ws_align ws max_stk_size)
   | CSSunrolled => ok (x86_clear_stack_unrolled rsp ws_align ws max_stk_size)
   end.
 

@@ -2,6 +2,7 @@
 
 (* The strategies are:
 - Loop: Overwrite with a simple one-instruction loop.
+- LoopSCT: Overwrite with a simple one-instruction loop, and put an LFENCE before the return.
 - Unrolled: Overwrite with a sequence of instructions (no loop).
 
 Implemented in [compiler/clear_stack.v]. *)
@@ -19,6 +20,7 @@ Unset Printing Implicit Defensive.
 
 Variant cs_strategy :=
 | CSSloop
+| CSSloopSCT
 | CSSunrolled.
 
 Scheme Equality for cs_strategy.

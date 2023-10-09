@@ -430,8 +430,7 @@ Definition stack_zeroization_cmd
   (ws_align ws : wsize)
   (max_stk_size : Z) :
   cexec lcmd :=
-  let msg := "Stack zeroization size not supported in ARMv7"%string in
-  let err :=
+  let err msg :=
     {|
       pel_msg := compiler_util.pp_s msg;
       pel_fn := None;
@@ -442,9 +441,14 @@ Definition stack_zeroization_cmd
       pel_internal := false;
   |}
   in
-  Let _ := assert (ws <= U32)%CMP err in
+  let err_size :=
+    err "Stack zeroization size not supported in ARMv7"%string in
+  Let _ := assert (ws <= U32)%CMP err_size in
   match css with
   | CSSloop => ok (stack_zero_loop rsp lbl ws_align ws max_stk_size)
+  | CSSloopSCT =>
+    let err_sct := err "Strategy ""loop with SCT"" is not supported in ARMv7"%string in
+    Error err_sct
   | CSSunrolled => ok (stack_zero_unrolled rsp ws_align ws max_stk_size)
   end.
 

@@ -441,7 +441,7 @@ let warning (w:warning) loc =
 
 let szero_strategies =
   let open Clear_stack_strategy in
-  [ ("loop", CSSloop); ("unrolled", CSSunrolled) ]
+  [ ("loop", CSSloop); ("loopSCT", CSSloopSCT); ("unrolled", CSSunrolled) ]
 
 (* -------------------------------------------------------------------- *)
 
