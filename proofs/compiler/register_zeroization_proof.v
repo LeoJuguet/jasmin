@@ -26,6 +26,7 @@ Unset Printing Implicit Defensive.
 Section ZEROIZATION.
 
 Context
+  {wsw : WithSubWord}
   {asm_op syscall_state : Type}
   {ep : EstateParams syscall_state}
   {spp : SemPexprParams}
@@ -33,14 +34,14 @@ Context
   {ovm_i : one_varmap_info}
   (zeroized : var -> option value).
 
-Definition zeroized_on (vm : vmap) (x : var) : Prop :=
-  match get_var vm x, zeroized x with
-  | Ok v, Some v' => v = v'
-  | _, _ => False
+Definition zeroized_on (vm : Vm.t) (x : var) : Prop :=
+  match zeroized x with
+  | Some v => Vm.get vm x = v
+  | None => False
   end.
 
-Definition zeroized_on_vars (vm vm' : vmap) (xs : Sv.t) : Prop :=
-  vm' = vm [\ xs ]
+Definition zeroized_on_vars (vm vm' : Vm.t) (xs : Sv.t) : Prop :=
+  vm' =[\ xs ] vm
   /\ forall x, Sv.mem x xs -> zeroized_on vm' x.
 
 #[export]
@@ -68,7 +69,7 @@ Proof.
 
   - move: hy => /Sv.union_spec /Decidable.not_or.
     move=> [hxs hys].
-    rewrite (vmap_eq_exceptTI hvm1 hvm0); first done.
+    rewrite (eq_exTI hvm1 hvm0); first done.
     move=> /Sv.union_spec.
     by move=> [].
 
@@ -78,7 +79,7 @@ Proof.
     last by move: hys => /negbT /Sv_memP.
 
   rewrite /zeroized_on.
-  rewrite (get_var_eq_except _ hvm1).
+  rewrite hvm1.
   - move: hxs => /Sv_memP. exact: hzero0.
   apply/Sv_memP.
   by rewrite hys.
@@ -122,13 +123,13 @@ Definition h_rz_cmd_args_spec
     -> seq var
     -> pp_error_loc
     -> (var -> pp_error_loc)
-    -> cexec (seq lopn_args))
+    -> cexec (seq fopn_args))
   (zeroized : var -> option value) :
   Prop :=
   forall lp scs vm m fn rzm xs err_flags err_register P Q args,
     rz_cmd_args rzm xs err_flags err_register = ok args
     -> (forall x, x \in xs -> ~~ is_sbool (vtype x))
-    -> let: lcmd := map (li_of_lopn_args dummy_instr_info) args in
+    -> let: lcmd := map (li_of_fopn_args dummy_instr_info) args in
        is_linear_of lp fn (P ++ lcmd ++ Q)
        -> exists2 vm',
             let: ls :=
@@ -332,14 +333,14 @@ Proof.
   by t_xrbindP=> ?? <-.
 Qed.
 
-Lemma register_zeroization_correct lp lp' scs m fn vm scs' m' vm' lfd vres :
+Lemma register_zeroization_correct wdb lp lp' scs m fn vm scs' m' vm' lfd vres :
   register_zeroization_lprog lp = ok lp'
   -> lsem_exportcall lp scs m fn vm scs' m' vm'
   -> get_fundef (lp_funcs lp) fn = Some lfd
-  -> mapM (fun x => get_var vm' (v_var x)) (lfd_res lfd) = ok vres
+  -> mapM (fun x => get_var wdb vm' (v_var x)) (lfd_res lfd) = ok vres
   -> exists2 vm'',
        lsem_exportcall lp' scs m fn vm scs' m' vm''
-       & mapM (fun x => get_var vm'' (v_var x)) (lfd_res lfd) = ok vres.
+       & mapM (fun x => get_var wdb vm'' (v_var x)) (lfd_res lfd) = ok vres.
 Proof.
   move=> h [lfd' hlfd' hexport hsem hvm'] hlfd hvres.
 
@@ -363,13 +364,13 @@ Proof.
     move: (vars_of_rzm _) => vom.
     elim: (lfd_res lfd) => //= x xs hind hvm''.
 
-    rewrite (get_var_eq_except _ hvm''); first last.
+    rewrite (get_var_eq_ex _ _ hvm''); first last.
     + move=> /Sv.diff_spec [_ hxs].
       move: hxs => /sv_of_listP.
       by rewrite mem_head.
 
     rewrite hind {hind}; first done.
-    + apply: (vmap_eq_exceptI _ hvm'').
+    + apply: (eq_exI _ hvm'').
       apply: Sv_subset_diff_diff; first done.
       move=> y /sv_of_listP hy.
       apply/sv_of_listP.

@@ -11,12 +11,12 @@ let preprocess reg_size asmOp p =
 
 (* -------------------------------------------------------------------- *)
 
-let parse_file reg_size asmOp_sopn fname =
+let parse_file arch_info fname =
   let env =
     List.fold_left Pretyping.Env.add_from Pretyping.Env.empty
       !Glob_options.idirs
   in
-  Pretyping.tt_program reg_size asmOp_sopn env fname
+  Pretyping.tt_program arch_info env fname
 
 (* -------------------------------------------------------------------- *)
 let rec warn_extra_i pd asmOp i =
@@ -133,7 +133,42 @@ let compile (type reg regx xreg rflag cond asm_op extra_op)
         :: !arrs
     in
     Hv.iter doarr harrs;
-    { Array_expansion.vars; arrs = !arrs }
+
+    let f_cc =
+      match fd.f_cc with
+      | Subroutine si ->
+          (* Since some arguments/returns are expended we need to fix the info *)
+          let tbl = Hashtbl.create 17 in
+          let newpos = ref 0 in
+          let mk_n x =
+            match x.v_kind, x.v_ty with
+            | Reg (_, Direct), Arr (_, n) -> n
+            | _, _ -> 1
+          in
+          let doarg i x =
+            Hashtbl.add tbl i !newpos;
+            newpos := !newpos + mk_n x
+          in
+          List.iteri doarg fd.f_args;
+          let doret o x =
+            match o with
+            | Some i -> [Some (Hashtbl.find tbl i)]
+            | None -> List.init (mk_n (L.unloc x)) (fun _ -> None)
+          in
+          let returned_params =
+            List.flatten (List.map2 doret si.returned_params fd.f_ret) in
+          FInfo.Subroutine { returned_params }
+
+      | _ -> fd.f_cc
+    in
+    let do_outannot x a =
+      try
+        let (_, va) = Hv.find harrs (L.unloc x) in
+        List.init (Array.length va) (fun _ -> [])
+      with Not_found -> [a] in
+    let f_outannot = List.flatten (List.map2 do_outannot fd.f_ret fd.f_outannot) in
+    let finfo = fd.f_loc, fd.f_annot, f_cc, f_outannot in
+    { Array_expansion.vars; arrs = !arrs; finfo }
   in
 
   let refresh_instr_info fn f =
@@ -161,8 +196,6 @@ let compile (type reg regx xreg rflag cond asm_op extra_op)
     let tokeep = RemoveUnusedResults.analyse fds in
     tokeep
   in
-
-  let is_reg_array x = is_reg_arr (Conv.var_of_cvar x) in
 
   let warn_extra s p =
     if s = Compiler.DeadCode_RegAllocation then
@@ -241,7 +274,6 @@ let compile (type reg regx xreg rflag cond asm_op extra_op)
       Compiler.lowering_opt = Arch.lowering_opt;
       Compiler.fresh_id;
       Compiler.fresh_var_ident = Conv.fresh_var_ident;
-      Compiler.is_reg_array;
       Compiler.cp_rzm_of_fn = rzm_of_fn;
       Compiler.slh_info;
       Compiler.clear_stack_info = szs_of_fn;

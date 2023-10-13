@@ -10,7 +10,6 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-Local Open Scope vmap.
 Local Open Scope seq_scope.
 
 Module Import E.
@@ -518,7 +517,7 @@ Definition with_var xi x :=
 Definition base_ptr sc :=
   match sc with
   | Slocal => pmap.(vrsp)
-  | Sglobal => pmap.(vrip)
+  | Sglob => pmap.(vrip)
   end.
 
 Definition addr_from_pk (x:var_i) (pk:ptr_kind) :=
@@ -902,15 +901,6 @@ Definition alloc_protect_ptr rmap ii r t e msf :=
       end
     end
   | Some _ => Error (stk_error_no_var "cannot assign protect_ptr in a sub array" )
-  end.
-
-
-(* This function is also defined in array_init.v *)
-(* TODO: clean *)
-Definition is_array_init e := 
-  match e with
-  | Parr_init _ => true
-  | _ => false
   end.
 
 (* We do not update the [var_region] part *)

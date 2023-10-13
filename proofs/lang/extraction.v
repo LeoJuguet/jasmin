@@ -27,6 +27,7 @@ Extract Constant expr.VarInfo.witness => "Location._dummy".
 Extract Constant expr.var_info => "Location.t".
 Extract Constant expr.InstrInfo.t => "IInfo.t".
 Extract Constant expr.InstrInfo.witness => "IInfo.dummy".
+Extract Constant expr.InstrInfo.with_location => "IInfo.with_location".
 Extract Constant expr.instr_info => "IInfo.t".
 Extract Constant expr.fun_info => "FInfo.t".
 Extract Constant waes.MixColumns => "(fun _ -> failwith ""MixColumns is not implemented"")".
@@ -60,10 +61,11 @@ Extraction Blacklist String List Nat Utils Var Array.
 Separate Extraction
   utils
   warray_
+  sem_type
   sopn
   expr
   register_zeroization_mode
-  sem
+  psem_defs
   sem_params_of_arch_extra
   arch_decl
   arch_extra

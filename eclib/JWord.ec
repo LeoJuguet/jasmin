@@ -1529,7 +1529,7 @@ op MUL_XX (v1 v2: t) =
 
 op IMUL_overflow (hi lo: t) : bool =
   let ov = wdwords hi lo in
-  (ov < -modulus) || (modulus - 1 < ov).
+  (ov < min_sint) || (max_sint < ov).
 
 op IMUL_XX (v1 v2: t) =
   let lo = v1 * v2 in
@@ -1585,6 +1585,8 @@ op ADCX_XX (v1 v2: t) (c:bool) = addc v1 v2 c.
 op ADOX_XX (v1 v2: t) (c:bool) = addc v1 v2 c.
 
 op MULX_XX (v1 v2: t) = mulu v1 v2.
+op MULX_lo_hi_XX (v1 v2: t) = let (hi,lo) = mulu v1 v2 in (lo, hi).
+op MULX_hi_XX (v1 v2: t) = (mulu v1 v2).`1.
 
 op sub_borrow (x y c: int) : t =
   of_int (x - y - c).
@@ -2194,6 +2196,25 @@ abstract theory W_WS.
      apply: (ltr_le_trans (2^sizeS)) => //.
      smt (ler_weexpn2l le_size WS.gt0_size).
    qed.
+
+  lemma nosmt zeroextu'BE (x: WS.t) :
+     zeroextu'B x = pack'R_t (Pack.init (fun i => if i = 0 then x else WS.of_int 0)).
+  proof.
+     apply/wordP => i h.
+     rewrite pack'RbE // of_int_bits'S_div // initE h /=.
+     move/mem_range: h.
+     rewrite range_ltn; first exact: gt0_r.
+     case.
+     + by move => ->; rewrite /= to_uintK.
+     rewrite /= => /mem_range h.
+     have -> /= : i <> 0; first smt().
+     rewrite divz_small; last by [].
+     have [-> /= /ltr_le_trans ] := WS.to_uint_cmp x.
+     apply.
+     apply: (ler_trans (2 ^ (sizeS * i))); last exact: ler_norm.
+     apply: ler_weexpn2l; first by [].
+     smt(WS.gt0_size).
+ qed.
 
    lemma zeroextu'B_bit (w:WS.t) i: (zeroextu'B w).[i] = ((0 <= i < sizeS) /\ w.[i]).
    proof.

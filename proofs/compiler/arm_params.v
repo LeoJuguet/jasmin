@@ -70,26 +70,38 @@ Definition arm_op_align (x y : var_i) (al : wsize) :=
 
 (* Precondition: [0 <= imm < wbase reg_size]. *)
 Definition arm_cmd_load_large_imm (x : var_i) (imm : Z) : seq fopn_args :=
-  let '(hbs, lbs) := Z.div_eucl imm (wbase U16) in
-  [:: arm_op_movi x lbs; arm_op_movt x hbs ].
+  if is_expandable imm || is_w16_encoding imm
+  then [:: arm_op_movi x imm ]
+  else
+    let '(hbs, lbs) := Z.div_eucl imm (wbase U16) in
+    [:: arm_op_movi x lbs; arm_op_movt x hbs ].
 
 (* Return a command that performs an operation with an immediate argument,
    loading it into a register if needed.
    In symbols,
        R[x] := R[y] <+> imm
-   Precondition: [x <> y].
- *)
+   Precondition: if [imm] is large, [x <> y].
+
+   We use [is_expandable] but this is an more restrictive than necessary, for
+   some mnemonics we could use [is_wXX_encoding]. *)
 Definition arm_cmd_large_arith_imm
   (on_reg : var_i -> var_i -> var_i -> fopn_args)
   (on_imm : var_i -> var_i -> Z -> fopn_args)
+  (neutral : option Z)
   (x y : var_i)
   (imm : Z) :
   seq fopn_args :=
-  arm_cmd_load_large_imm x imm ++ [:: on_reg x y x ].
+  let is_mov := if neutral is Some x then (imm =? x)%Z else false in
+  if is_mov
+  then [:: arm_op_mov x y ]
+  else
+    if is_expandable imm
+    then [:: on_imm x y imm ]
+    else arm_cmd_load_large_imm x imm ++ [:: on_reg x y x ].
 
-(* Precondition: [x <> y]. *)
-Definition arm_cmd_large_subi (x y : var_i) (imm : Z) : seq fopn_args :=
-  arm_cmd_large_arith_imm arm_op_sub arm_op_subi x y imm.
+(* Precondition: if [imm] is large, [x <> y]. *)
+Definition arm_cmd_large_subi :=
+  arm_cmd_large_arith_imm arm_op_sub arm_op_subi (Some 0%Z).
 
 (* ------------------------------------------------------------------------ *)
 (* Stack alloc parameters. *)
@@ -120,7 +132,7 @@ Definition arm_saparams : stack_alloc_params :=
 
 Section LINEARIZATION.
 
-Notation vtmpi := {| v_var := to_var R12; v_info := dummy_var_info; |}.
+Notation vtmpi := (mk_var_i (to_var R12)).
 
 (* TODO_ARM: This assumes 0 <= sz < 4096. *)
 Definition arm_allocate_stack_frame (rspi : var_i) (sz : Z) :=
@@ -133,31 +145,22 @@ Definition arm_free_stack_frame (rspi : var_i) (sz : Z) :=
 (* TODO_ARM: Review. This seems unnecessary. *)
 Definition arm_lassign
   (lv : lexpr) (ws : wsize) (e : rexpr) : option _ :=
-  let args :=
+  let%opt (mn, e') :=
     match lv with
     | LLvar _ =>
-        if ws is U32
-        then
-          match e with
-          | Rexpr (Fapp1 (Oword_of_int U32) (Fconst _))
-          | Rexpr (Fvar _) =>
-              Some (MOV, e)
-          | Load _ _ _ =>
-              Some (LDR, e)
-          | _ =>
-              None
-          end
-        else
-          None
+        let%opt _ := chk_ws_reg ws in
+        match e with
+        | Rexpr (Fapp1 (Oword_of_int U32) (Fconst _))
+        | Rexpr (Fvar _) => Some (MOV, e)
+        | Load _ _ _ => Some (LDR, e)
+        | _ => None
+        end
     | Store _ _ _ =>
-        if store_mn_of_wsize ws is Some mn
-        then Some (mn, e)
-        else None
+        let%opt mn := store_mn_of_wsize ws in
+        Some (mn, e)
     end
   in
-  if args is Some (mn, e')
-  then Some ([:: lv ], Oarm (ARM_op mn default_opts), [:: e' ])
-  else None.
+  Some ([:: lv ], Oarm (ARM_op mn default_opts), [:: e' ]).
 
 Definition arm_set_up_sp_register
   (rspi : var_i)
@@ -165,27 +168,21 @@ Definition arm_set_up_sp_register
   (al : wsize)
   (r : var_i) :
   option (seq fopn_args) :=
-  if (0 <=? sf_sz)%Z && (sf_sz <? wbase reg_size)%Z
-  then
-    let i0 := arm_op_mov r rspi in
-    let load_imm := arm_cmd_large_subi vtmpi rspi sf_sz in
-    let i1 := arm_op_align vtmpi vtmpi al in
-    let i2 := arm_op_mov rspi vtmpi in
-    Some (i0 :: load_imm ++ [:: i1; i2 ])
-  else
-    None.
+  let%opt _ := oassert ((0 <=? sf_sz)%Z && (sf_sz <? wbase reg_size)%Z) in
+  let i0 := arm_op_mov r rspi in
+  let load_imm := arm_cmd_large_subi vtmpi rspi sf_sz in
+  let i1 := arm_op_align vtmpi vtmpi al in
+  let i2 := arm_op_mov rspi vtmpi in
+  Some (i0 :: load_imm ++ [:: i1; i2 ]).
 
 Definition arm_set_up_sp_stack
   (rspi : var_i) (sf_sz : Z) (al : wsize) (off : Z) : option (seq fopn_args) :=
-  if (0 <=? sf_sz)%Z && (sf_sz <? wbase reg_size)%Z
-  then
-    let load_imm := arm_cmd_large_subi vtmpi rspi sf_sz in
-    let i0 := arm_op_align vtmpi vtmpi al in
-    let i1 := arm_op_str_off rspi vtmpi off in
-    let i2 := arm_op_mov rspi vtmpi in
-    Some (load_imm ++ [:: i0; i1; i2 ])
-  else
-    None.
+  let%opt _ := oassert ((0 <=? sf_sz)%Z && (sf_sz <? wbase reg_size)%Z) in
+  let load_imm := arm_cmd_large_subi vtmpi rspi sf_sz in
+  let i0 := arm_op_align vtmpi vtmpi al in
+  let i1 := arm_op_str_off rspi vtmpi off in
+  let i2 := arm_op_mov rspi vtmpi in
+  Some (load_imm ++ [:: i0; i1; i2 ]).
 
 Definition arm_tmp : Ident.ident := vname (v_var vtmpi).
 
@@ -209,8 +206,7 @@ End LINEARIZATION.
 #[ local ]
 Definition arm_fvars_correct
   (fv : fresh_vars)
-  {eft : eqType}
-  {pT : progT eft}
+  {pT : progT}
   (fds : seq fun_decl) :
   bool :=
   fvars_correct (all_fresh_vars fv) (fvars fv) fds.
@@ -370,7 +366,7 @@ Definition sz_init : lcmd :=
     :: arm_op_sub vrsp vrsp voff
     :: [:: arm_op_movi vzero 0 ]
   in
-  map (li_of_lopn_args dummy_instr_info) args.
+  map (li_of_fopn_args dummy_instr_info) args.
 
 Definition store_zero (off : fexpr) : linstr_r :=
   if store_mn_of_wsize ws is Some mn
@@ -405,7 +401,7 @@ Definition sz_loop : lcmd :=
   map (MkLI dummy_instr_info) irs.
 
 Definition restore_sp :=
-  [:: li_of_lopn_args dummy_instr_info (arm_op_mov vrsp vsaved_sp) ].
+  [:: li_of_fopn_args dummy_instr_info (arm_op_mov vrsp vsaved_sp) ].
 
 Definition stack_zero_loop : lcmd := sz_init ++ sz_loop ++ restore_sp.
 
@@ -468,7 +464,7 @@ Section REGISTER_ZEROIZATION.
 Context {ovmi : one_varmap_info}.
 
 Definition arm_zeroize_var
-  (err_register : var -> pp_error_loc) (x : var) : cexec lopn_args :=
+  (err_register : var -> pp_error_loc) (x : var) : cexec fopn_args :=
   if vtype x is sword U32
   then
     let xi := {| v_var := x; v_info := dummy_var_info; |} in
@@ -477,7 +473,7 @@ Definition arm_zeroize_var
     Error (err_register x).
 
 Definition arm_zeroize_flags
-  (err_flags : pp_error_loc) (ox : option var) : cexec (seq lopn_args) :=
+  (err_flags : pp_error_loc) (ox : option var) : cexec (seq fopn_args) :=
   if ox is Some x
   then
     let xi := {| v_var := x; v_info := dummy_var_info; |} in

@@ -17,7 +17,6 @@ Require
   linearization
   linearization_proof
   lowering
-  propagate_inline_proof
   stack_alloc
   stack_alloc_proof
   clear_stack
@@ -29,6 +28,8 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+#[local] Existing Instance withsubword.
+#[local] Existing Instance direct_c.
 
 Record h_lowering_params
   {syscall_state : Type} {sc_sem : syscall.syscall_sem syscall_state}
@@ -38,8 +39,7 @@ Record h_lowering_params
   {
     hlop_lower_callP :
       forall
-        (eft : eqType)
-        (pT : progT eft)
+        (pT : progT)
         (sCP : semCallParams)
         (p : prog)
         (ev : extra_val_t)
@@ -51,7 +51,7 @@ Record h_lowering_params
         (scs: syscall_state_t) (mem : low_memory.mem)
         (scs': syscall_state_t) (mem' : low_memory.mem)
         (va vr : seq value),
-        sem_call p ev scs mem f va scs' mem' vr
+        sem_call (dc:= direct_c) p ev scs mem f va scs' mem' vr
         -> let lprog :=
              lowering.lower_prog
                (lop_lower_i loparams)
@@ -69,9 +69,6 @@ Record h_architecture_params
   (lowering_options : Type)
   (aparams : architecture_params lowering_options) :=
   {
-    (* Propagate inline hypotheses. See [propagate_inline_proof.v]. *)
-    hap_hpip : propagate_inline_proof.h_propagate_inline_params;
-
     (* Stack alloc hypotheses. See [stack_alloc_proof.v]. *)
     hap_hsap :
         stack_alloc_proof.h_stack_alloc_params (ap_sap aparams);

@@ -107,6 +107,7 @@ Variant arm_mnemonic : Type :=
 | UDIV                           (* Unsigned division *)
 | UMULL                          (* Multiply and split the result in two
                                     registers *)
+| UMAAL                          (* Multiply and add twice *)
 | UMLAL                          (* Multiply and split the result to add it 
                                     to the two destinations*)
 | SMULL                          (* Signed version of UMULL*)
@@ -170,7 +171,7 @@ Instance eqTC_arm_mnemonic : eqTypeC arm_mnemonic :=
 Canonical arm_mnemonic_eqType := @ceqT_eqType _ eqTC_arm_mnemonic.
 
 Definition arm_mnemonics : seq arm_mnemonic :=
-  [:: ADD; ADC; MUL; MLA; MLS; SDIV; SUB; RSB; UDIV; UMULL; UMLAL; SMULL; SMLAL; SMMUL; SMMULR
+  [:: ADD; ADC; MUL; MLA; MLS; SDIV; SUB; RSB; UDIV; UMULL; UMAAL; UMLAL; SMULL; SMLAL; SMMUL; SMMULR
     ; AND; BIC; EOR; MVN; ORR
     ; ASR; LSL; LSR; ROR
     ; ADR; MOV; MOVT; UBFX; UXTB; UXTH; SBFX
@@ -254,6 +255,7 @@ Definition string_of_arm_mnemonic (mn : arm_mnemonic) : string :=
   | RSB => "RSB"
   | UDIV => "UDIV"
   | UMULL => "UMULL"
+  | UMAAL => "UMAAL"
   | UMLAL => "UMLAL"
   | SMULL => "SMULL"
   | SMLAL => "SMLAL"
@@ -560,7 +562,7 @@ Arguments mk_shifted : clear implicits.
 Definition pp_arm_op
   (mn : arm_mnemonic) (opts : arm_options) (args : seq asm_arg) : pp_asm_op :=
   {|
-    pp_aop_name := string_of_arm_mnemonic mn; (* TODO_ARM: This is not used. *)
+    pp_aop_name := string_of_arm_mnemonic mn;
     pp_aop_ext := PP_name;
     pp_aop_args := map (fun a => (reg_size, a)) args;
   |}.
@@ -889,6 +891,30 @@ Definition arm_UMULL_instr : instr_desc_t :=
     id_pp_asm := pp_arm_op mn opts;
   |}.
 
+Definition arm_UMAAL_semi (wa wb wn wm : ty_r) : exec ty_rr :=
+  let r := (wunsigned wa + wunsigned wb + wunsigned wn * wunsigned wm)%Z in
+  ok (wrepr reg_size r, high_bits reg_size r).
+
+Definition arm_UMAAL_instr : instr_desc_t :=
+  let mn := UMAAL in
+  {|
+    id_msb_flag := MSB_MERGE;
+    id_tin := [:: sreg; sreg; sreg; sreg ];
+    id_in := [:: E 0; E 1; E 2; E 3 ];
+    id_tout := [:: sreg; sreg ];
+    id_out := [:: E 0; E 1 ];
+    id_semi := arm_UMAAL_semi;
+    id_nargs := 4;
+    id_args_kinds := ak_reg_reg_reg_reg;
+    id_eq_size := refl_equal;
+    id_tin_narr := refl_equal;
+    id_tout_narr := refl_equal;
+    id_check_dest := refl_equal;
+    id_str_jas := pp_s (string_of_arm_mnemonic mn);
+    id_safe := [::]; (* TODO_ARM: Complete. *)
+    id_pp_asm := pp_arm_op mn opts;
+  |}.
+
 Definition arm_UMLAL_semi (dlo dhi wn wm : ty_r) : exec ty_rr :=
   let (hi, lo) := wumul wn wm in
   ok(wdaddu dhi dlo hi lo).
@@ -914,8 +940,7 @@ Definition arm_UMLAL_instr : instr_desc_t :=
   |}.
 
 Definition arm_SMULL_semi (wn wm : ty_r) : exec ty_rr :=
-  let (hi, lo) := wsmul wn wm in
-  ok (lo, hi).
+  ok (wsmul wn wm).
 
 Definition arm_SMULL_instr : instr_desc_t :=
   let mn := SMULL in
@@ -924,7 +949,7 @@ Definition arm_SMULL_instr : instr_desc_t :=
     id_tin := [:: sreg; sreg ];
     id_in := [:: E 2; E 3 ];
     id_tout := [:: sreg; sreg ];
-    id_out := [:: E 0; E 1 ];
+    id_out := [:: E 1; E 0 ];
     id_semi := arm_SMULL_semi;
     id_nargs := 4;
     id_args_kinds := ak_reg_reg_reg_reg;
@@ -987,8 +1012,7 @@ Definition arm_SMMUL_instr : instr_desc_t :=
 
 
 Definition arm_SMMULR_semi (wn wm : ty_r) : exec ty_r :=
-  let (hi, lo) := wsmul wn wm in
-  ok ((hi + wrepr U32 (Z.b2z (msb lo)))%R).
+  ok (high_bits reg_size (wsigned wn * wsigned wm + 0x80000000)).
 
 Definition arm_SMMULR_instr : instr_desc_t :=
   let mn := SMMULR in
@@ -1055,7 +1079,7 @@ Definition arm_AND_instr : instr_desc_t :=
   else drop_nzc x.
 
 Definition arm_BIC_instr : instr_desc_t :=
-  let mn := AND in
+  let mn := BIC in
   let x :=
     {|
       id_msb_flag := MSB_MERGE;
@@ -1637,6 +1661,7 @@ Definition mn_desc (mn : arm_mnemonic) : instr_desc_t :=
   | RSB => arm_RSB_instr
   | UDIV => arm_UDIV_instr
   | UMULL => arm_UMULL_instr
+  | UMAAL => arm_UMAAL_instr
   | UMLAL => arm_UMLAL_instr
   | SMULL => arm_SMULL_instr
   | SMLAL => arm_SMLAL_instr

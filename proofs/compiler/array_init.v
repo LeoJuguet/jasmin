@@ -7,7 +7,6 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-Local Open Scope vmap.
 Local Open Scope seq_scope.
 
 Section ASM_OP.
@@ -20,12 +19,6 @@ Context `{asmop:asmOp}.
 Section Section.
 
 Context (is_reg_array : var -> bool).
-
-Definition is_array_init e :=
-  match e with
-  | Parr_init _ => true
-  | _           => false
-  end.
 
 Fixpoint remove_init_i i :=
   match i with
@@ -60,7 +53,7 @@ Fixpoint remove_init_i i :=
 
 Definition remove_init_c c :=  foldr (fun i c => remove_init_i i ++ c) [::] c.
 
-Context {T} {pT:progT T}.
+Context {pT: progT}.
 
 Definition remove_init_fd (fd:fundef) :=
   {| f_info   := fd.(f_info);
@@ -120,10 +113,10 @@ Fixpoint add_init_i I (i:instr) :=
     let Wi := write_i ir in
     let Ri := read_i ir in
     let extra := Sv.union Wi Ri in
-    (add_init ii I extra i, Sv.union I Wi)
+    (add_init (ii_with_location ii) I extra i, Sv.union I Wi)
   end.
 
-Context {T} {pT:progT T}.
+Context {pT: progT}.
 
 Definition add_init_fd (fd:fundef) :=
   let I := vrvs [seq (Lvar i) | i <- f_params fd] in

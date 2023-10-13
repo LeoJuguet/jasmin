@@ -57,7 +57,7 @@ Record register_zeroization_params :=
       -> seq var
       -> pp_error_loc
       -> (var -> pp_error_loc)
-      -> cexec (seq lopn_args);
+      -> cexec (seq fopn_args);
   }.
 
 End REGISTER_ZEROIZATION_PARAMS.
@@ -79,7 +79,7 @@ Definition rz_cmd (rzm : rzmode) (lfd : lfundef) : cexec lcmd :=
   Let args :=
     rz_cmd_args rzparams rzm vars E.cant_zeroize_flags E.cant_zeroize_register
   in
-  ok (map (li_of_lopn_args dummy_instr_info) args).
+  ok (map (li_of_fopn_args dummy_instr_info) args).
 
 Definition register_zeroization_lfd
   (fn : funname) (lfd : lfundef) : cexec lfundef :=

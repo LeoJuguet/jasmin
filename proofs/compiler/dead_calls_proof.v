@@ -11,6 +11,8 @@ Unset Printing Implicit Defensive.
 Section WITH_PARAMS.
 
 Context
+  {wsw : WithSubWord}
+  {dc:DirectCall}
   {asm_op syscall_state : Type}
   {ep : EstateParams syscall_state}
   {spp : SemPexprParams}
@@ -120,7 +122,7 @@ End CALLS.
 
 Section Section.
 
-Context {T:eqType} {pT:progT T} {sCP: semCallParams}.
+Context {pT: progT} {sCP: semCallParams}.
 
 #[local]
 Instance live_calls_m : Proper (Sf.Equal ==> eq ==> Sf.Equal) live_calls.

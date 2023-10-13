@@ -74,13 +74,12 @@ Record lprog :=
 
 End ASM_OP.
 
-Notation lopn_args := (seq lexpr * sopn * seq rexpr)%type (only parsing).
+Notation fopn_args := (lexprs * sopn * rexprs)%type.
 
-Definition li_of_lopn_args
+Definition li_of_fopn_args
   {asm_op : Type}
   {asmop : asmOp asm_op}
   (ii : instr_info)
-  (p : lopn_args) :
+  (p : fopn_args) :
   linstr :=
   MkLI ii (Lopn p.1.1 p.1.2 p.2).
-

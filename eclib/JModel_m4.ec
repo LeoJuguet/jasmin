@@ -48,6 +48,12 @@ op AND x y = let (_n, _z, _c, r) = ANDS x y in r.
 op ANDScc x y g n z c o = if g then ANDS x y else (n, z, c, o).
 op ANDcc x y g o = if g then AND x y else o.
 
+op BICS (x y: W32.t) : bool * bool * bool * W32.t =
+  with_nzc (andw x (invw y)).
+op BIC x y = let (_n, _z, _c, r) = BICS x y in r.
+op BICScc x y g n z c o = if g then BICS x y else (n, z, c, o).
+op BICcc x y g o = if g then BIC x y else o.
+
 op ASRS (x: W32.t) (s: W8.t) : bool * bool * bool * W32.t =
   with_nzc (sar x (to_uint s)).
 op ASR x s = let (_n, _z, _c, r) = ASRS x s in r.
@@ -182,6 +188,11 @@ op UMULL (x y: W32.t) : W32.t * W32.t =
   (lo, hi).
 op UMULLcc x y g o h = if g then UMULL x y else (o, h).
 
+op UMAAL (a b x y: W32.t) : W32.t * W32.t =
+  let r = to_uint a + to_uint b + to_uint x * to_uint y in
+  (of_int r, of_int (IntDiv.(%/) r modulus))%W32.
+op UMAALcc a b x y g o h = if g then UMAAL a b x y else (o, h).
+
 op UMLAL (u v x y: W32.t) : W32.t * W32.t =
   let n = wdwordu (mulhi x y) (x*y) in
   let m = wdwordu v u in
@@ -205,13 +216,9 @@ op SMMUL (x y: W32.t) : W32.t =
 op SMMULcc x y g o = if g then SMMUL x y else o.
 
 op SMMULR (x y: W32.t) : W32.t =
-  let lo = x * y in
-  let hi = wmulhs x y in
-  if msb lo
-    then (hi + (W32.of_int 1))
-    else hi.
+  W32.of_int (IntDiv.(%/) (to_sint x * to_sint y + 2 ^ 31) (2 ^ 32)).
 op SMMULRcc x y g o = if g then SMMULR x y else o.
- 
+
 op UXTB (x: W32.t) (n: W8.t) : W32.t =
   andw (ror x (to_uint n)) (W32.of_int 255).
 op UXTBcc x n g o = if g then UXTB x n else o.

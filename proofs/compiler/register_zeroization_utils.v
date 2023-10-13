@@ -20,15 +20,15 @@ Context
   {reg regx xreg rflag cond asm_op extra_op : Type}
   {asme : asm_extra reg regx xreg rflag cond asm_op extra_op}
   {ovmi : one_varmap_info}
-  (zeroize_var : (var -> pp_error_loc) -> var -> cexec lopn_args)
-  (zeroize_flags : pp_error_loc -> option var -> cexec (seq lopn_args)).
+  (zeroize_var : (var -> pp_error_loc) -> var -> cexec fopn_args)
+  (zeroize_flags : pp_error_loc -> option var -> cexec (seq fopn_args)).
 
 Definition naive_rz_cmd_args
   (rzm : rzmode)
   (xs : seq var)
   (err_flags : pp_error_loc)
   (err_register : var -> pp_error_loc) :
-  cexec (seq lopn_args) :=
+  cexec (seq fopn_args) :=
   let ignore := Sv.union one_varmap.callee_saved (sv_of_list id xs) in
   let f s := filter (fun x => ~~ Sv.mem x ignore) s in
   let regs := if rzm_registers rzm then f (map to_var registers) else [::] in

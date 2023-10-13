@@ -502,11 +502,13 @@ let allocate_one nv vars loc (cnf: conflicts) (x_:var) (x: int) (r: var) (a: A.a
      else
        let pv = Printer.pp_var ~debug:true in
        let regs = reverse_classes nv vars in
-       hierror_reg ~loc:(Lmore loc) "variable %a must be allocated to conflicting register %a { %a }"
+       let other = IntSet.fold (fun i -> Sv.union regs.(i)) c Sv.empty |> Sv.elements in
+       hierror_reg ~loc:(Lmore loc) "variable %a must be allocated to register %a due to architectural constaints; this register already holds conflicting variable%s: %a"
          pv x_
          (Printer.pp_var ~debug:false) r
+         (match other with [ _ ] -> "" | _ -> "s")
          (pp_list "; " pv)
-         (IntSet.fold (fun i -> Sv.union regs.(i)) c Sv.empty |> Sv.elements)
+         other
 
 type reg_oracle_t = {
     ro_to_save: var list;
@@ -720,7 +722,22 @@ let two_phase_coloring
   List.iter (fun i ->
       let has_no_conflict v = does_not_conflict i cnf a v in
       match List.filter has_no_conflict registers with
-      | [] -> hierror_reg ~loc:Lnone "no more register to allocate “%a”" Printer.(pp_list "; " (pp_var ~debug:true)) (Hashtbl.find variables i)
+      | [] ->
+         let pv = Printer.pp_dvar ~debug:true in
+         let ppvl fmt = List.iter @@ Format.fprintf fmt "\n    %a" pv in
+         let pp_conflicts fmt =
+           IntSet.iter @@ fun i ->
+           match A.find i a with
+           | Some r ->
+              Format.fprintf fmt " - register %a%a\n"
+                (Printer.pp_var ~debug:false) r
+                ppvl (Hashtbl.find variables i)
+           | None -> assert false
+         in
+         let c = get_conflicts i cnf in
+         hierror_reg ~loc:Lnone "no more free register to allocate variable:%a\nConflicts with:\n%a"
+           ppvl (Hashtbl.find variables i)
+           pp_conflicts c
       | x :: regs ->
         (* Any register in [x; regs] is valid: the choice made here is arbitrary. *)
         let y = get_friend_registers x fr a i regs in
@@ -859,13 +876,11 @@ let global_allocation translate_var (funcs: ('info, 'asm) func list) : (unit, 'a
 
     Initial 'info are preserved in the result.
    *)
-  let annot_table : Annotations.f_annot Hf.t = Hf.create 17 in
   let liveness_table : (Sv.t * Sv.t, 'asm) func Hf.t = Hf.create 17 in
   let return_addresses : retaddr Hf.t = Hf.create 17 in
   let killed_map : Sv.t Hf.t = Hf.create 17 in
   let killed fn = Hf.find killed_map fn in
   let preprocess f =
-    Hf.add annot_table f.f_name f.f_annot;
     let f = f |> fill_in_missing_names |> Ssa.split_live_ranges false in
     Hf.add liveness_table f.f_name (Liveness.live_fd true f);
     (* compute where will be store the return address *)
