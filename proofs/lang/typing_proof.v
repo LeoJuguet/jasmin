@@ -24,7 +24,7 @@ move=> hg. have /= [_ hc ]:= get_gvar_compat hg.
 have := compat_valE hc. case hv: v hg hc=> [ | | | sz wsz | ui i] //=; subst.
 + move=> hg hc [] sz' hvt hsz; subst. by rewrite hvt.
 move=> hg _ hsub. rewrite /get_gvar in hg. move: hg.
-case: ifP=> //= hl.
+case: ifP=> //= hl. Print Vm.getP. Print compat_val. Print compat_type.
 (* get_var is undef *)
 + move=> hg. have [hu _ _] /=:= get_varP hg.
   case hui: ui i hg hsub hu => [ | | w | w'] //=.
@@ -34,8 +34,8 @@ case: ifP=> //= hl.
   + by move=> i hvm /eqP.
   (* undef of word *)
   case ht: (vtype (gv x))=> [ | | w1 | w'']//=.
-  move=> i hg hsz hv. 
-  case: w' hui i hg hv hsz=> [ hui i| hui i| hui i| hui i| hui i|].
+  move=> i hg hsz hv. cbn in i. 
+  case: w' hui i hg hv hsz=> [ hui i| hui i| hui i| hui i| hui i|] //=.
   (* u8 *)
   + move=> hg hv hsz. case: w'' hsz ht.
     + move=> //=.
@@ -44,57 +44,6 @@ case: ifP=> //= hl.
     + move=> //. admit.
     + move=> //. admit.
     admit.
-  (* u16 *) (* not correct: there is somewhere bug *)
-  + move=> hg hv hsz. case: w'' hsz ht.
-    + by move=> //. (* correct *) (* U16 <= U8 in the assumption *)
-    + by move=> hsz ht. (* correct *) 
-      (* U16 <= U16 in assumption and we need to prove sword16 = sword16 *)
-    + by move=> hsz ht. (* not correct *)
-      (* U16 <= U32 in assumption and we need to prove sword16 = sword32 *)
-    + by move=> hsz ht. (* not correct *)
-      (* U16 <= U64 in assumption and we need to prove sword16 = sword64 *)
-    + by move=> hsz ht. (* not correct *)
-      (* U16 <= U128 in assumption and we need to prove sword16 = sword128 *)
-    by move=> hsz ht. (* not correct *)
-    (* U16 <= U256 in assumption and we need to prove sword16 = sword256 *)
-  (* u32 *) (* not correct: there is somewhere bug *)
-  + move=> hg hv hsz. case: w'' hsz ht.
-    + by move=> //. (* correct *) (* U32 <= U8 in the assumption *)
-    + by move=> hsz ht. (* correct *) (* U32 <= U16 in assumption *)
-    + by move=> hsz ht. (* correct *) (* U32 <= U32 in assumption *)
-    + by move=> hsz ht. (* not correct *)
-      (* U32 <= U64 in assumption and we need to prove sword32 = sword64 *)
-    + by move=> hsz ht. (* not correct *)
-      (* U32 <= U128 in assumption and we need to prove sword32 = sword128 *)
-    by move=> hsz ht. (* not correct *)
-    (* U32 <= U256 in assumption and we need to prove sword32 = sword256 *)
-  (* u64 *) (* not correct: there is somewhere bug *)
-  + move=> hg hv hsz. case: w'' hsz ht.
-    + by move=> //. (* correct *) (* U64 <= U8 in the assumption *)
-    + by move=> hsz ht. (* correct *) (* U64 <= U16 in assumption *)
-    + by move=> hsz ht. (* correct *) (* U64 <= U32 in assumption *)
-    + by move=> hsz ht. (* correct *) (* U64 <= U64 in assumption *)
-    + by move=> hsz ht. (* not correct *)
-      (* U64 <= U128 in assumption and we need to prove sword64 = sword128 *)
-    by move=> hsz ht. (* not correct *)
-    (* U64 <= U256 in assumption and we need to prove sword64 = sword256 *)
-  (* u128 *) (* not correct: there is somewhere bug *)
-  + move=> hg hv hsz. case: w'' hsz ht.
-    + by move=> //. (* correct *) (* U128 <= U8 in the assumption *)
-    + by move=> hsz ht. (* correct *) (* U128 <= U16 in assumption *)
-    + by move=> hsz ht. (* correct *) (* U128 <= U32 in assumption *)
-    + by move=> hsz ht. (* correct *) (* U128 <= U64 in assumption *)
-    + by move=> hsz ht. (* correct *) (* U128 <= U128 in assumption *)
-    by move=> hsz ht. (* not correct *)
-    (* U128 <= U256 in assumption and we need to prove sword128 = sword256 *)
-  (* u256 *)
-  move=> hui hu hg. case: w'' ht.
-  + by move=> ht hv hsz. (* correct *)
-  + by move=> ht hv hsz. (* correct *)
-  + by move=> ht hv hsz. (* correct *)
-  + by move=> ht hv hsz. (* correct *)
-  + by move=> ht hv hsz. (* correct *)
-  by move=> ht hv hsz. (* correct *)
 move=> hg. case hui: ui i hg hsub=> [ | | w | w'] //=.
 + by move=> i hg /eqP.
 + by move=> i hg /eqP.

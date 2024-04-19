@@ -574,22 +574,6 @@ rewrite /sem_opN /=. case h: app_sopn => [r | er] //=.
 move=> [] heq; subst. 
 Admitted.
 
-Lemma wt_safe_mapM_not_error : forall pd t es vm s err,
-mapM2 ErrType (check_expr ty_pexpr pd) es t = ok vm ->
-interp_safe_conds (flatten (gen_safe_conds gen_safe_cond es)) s ->
-mapM (sem_pexpr false gd s) es <> Error err.
-Proof.
-move=> pd t es. elim: es t=> //= e es hin t ts s err.
-case: t=> //= ty tys. case hc: check_expr=> [cv | cvr] //=. 
-case hm: mapM2=> [mv | mvr] //= [] heq hs; subst.
-have [hs1 hs2] := interp_safe_concat (gen_safe_cond e) 
-                  (flatten (gen_safe_conds gen_safe_cond es)) s hs.
-case he: sem_pexpr=> [ve | ver] //=. case hes: mapM=> [ves | vesr] //=.
-+ move: (hin tys mv s vesr hm hs2)=> hes'. by rewrite hes in hes'.
-rewrite /check_expr /= /check_type /= in hc. move: hc.
-case hte: ty_pexpr=> [te | ter] //=. case: ifP=> //= hsub [] heq; subst.
-Admitted.
-
 Lemma type_of_get_gvar_eq : forall x (vm : @Vm.t nosubword) v,
 is_defined v ->
 get_gvar false gd vm x = ok v ->
@@ -709,14 +693,7 @@ move=> pd e s. elim: e=> //=.
   by have := wt_safe_sem_sop2_not_error pd op t1 e1 t2 e2 s ve1 ve2 
              vor hsub ht1 hsub' ht2 hs1 hs3 hs4 he1 he2 ho.
 (* PappN *)
-+ move=>op es hin t. rewrite /check_pexprs /=. case hm: mapM2=> [vm | vmr] //=.
-  move=> [] heq hs; subst. case hma: mapM=> [vma | vmar] //=.
-  + case ho: sem_opN=> [vo | vor] //=.
-    + exists vo. split=> //=. 
-      + rewrite /sem_opN /= in ho. move: ho. t_xrbindP=> tso happ htv.
-        have := type_of_to_val tso. by rewrite htv. 
-      by have := wt_safe_sem_opN_not_error pd es op vm vma s vor hm hs hma.
-    by have := wt_safe_mapM_not_error pd (type_of_opN op).1 es vm s vmar hm hs.
++ admit.
 (* Pif *)
 move=> t e hin e1 hin1 e2 hin2 ty hty hs. move: hty.
 rewrite /check_expr /= /check_type /=. t_xrbindP=> te te' hte. 
@@ -740,7 +717,7 @@ case: b he hbt=> //= b he hbt /=.
     by have //= := wt_safe_truncate_not_error pd e1 s v1 t1 ty vtr' hs3 hte1 he1 hsub.
   by have //= := wt_safe_truncate_not_error pd e2 s v2 t2 ty vtr hs4 hte2 he2 hsub'.
 move=> hbeq; subst. by have //= := safe_not_undef e s sbool he hs1 hbt. 
-Qed.
+Admitted.
 
 
 (*Theorem sem_pexpr_safe : forall e s r,
