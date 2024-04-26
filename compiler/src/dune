@@ -22,5 +22,7 @@
 
 (rule
  (targets uint63.ml)
- (deps (:gen-file uint63_%{ocaml-config:int_size}.ml))
- (action (copy# %{gen-file} %{targets})))
+ (deps
+  (:gen-file uint63_%{ocaml-config:int_size}.ml))
+ (action
+  (copy# %{gen-file} %{targets})))

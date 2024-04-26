@@ -35,7 +35,7 @@ OBELISK ?= obelisk
 
 # --------------------------------------------------------------------
 .PHONY: all build byte native CIL check check-ci __force__
-.PHONY: clean install uninstall dist
+.PHONY: clean install uninstall dist jasa
 .PHONY: %.ml %.mli %.inferred.mli
 
 .PRECIOUS: _c_build/%.s _c_build/%.o
@@ -57,6 +57,11 @@ byte:
 
 native:
 	$(call do-build,exe)
+
+jasa:
+	$(RM) jasa.exe
+	dune build jasa
+	ln -sf "_build/default/jasa/jasa.exe" jasa.exe
 
 CIL:
 	rm -f src/CIL/*.ml src/CIL/*.mli ../proofs/extraction.vo
