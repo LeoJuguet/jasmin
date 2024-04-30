@@ -1,0 +1,49 @@
+param int KYBER_POLYCOMPRESSEDBYTES = 128;
+param int KYBER_N = 256;
+param int KYBER_Q = 3329;
+
+/* branch cryptoline */
+// abstract predicate u64 se_16_64 (u16);
+// abstract predicate bool eqsmod64(u64, u64, u64);
+
+/* initilized => can read from memory/array region */
+/* valid => can write to memory region (not needed for arrays) */
+/* name of var, initial position, length */
+/* implicit that   0 <= p + o && p + o <= p + o + len < W64.modulus */
+/* note that base and offset ints can be (int)expr where expr<:u64> */
+// abstract type memory;
+// abstract predicate memory initial(); /* the global memory array for predicates at function entry */
+// abstract predicate memory current(); /* the global memory array for predicates at function exit */
+// abstract predicate bool valid_ptr(u64 p , int o, int len); /* not needed for arrays */
+// abstract predicate bool disjoint(u64,int,int,u64,int,int); /* same for arrays? */
+// abstract predicate bool initialized(u16[KYBER_N], int, int); /* same for memory */
+// abstract predicate bool eq_except(u16[KYBER_N], u16[KYBER_N], int, int) /* same for memory */
+// abstract predicate bool eq_on(u16[KYBER_N], u16[KYBER_N], int, int) /* same for memory */
+
+fn _poly_csubq(reg ptr u16[KYBER_N] rp) -> reg ptr u16[KYBER_N]
+// requires #[prover=safety] {initialized(rp,0,KYBER_N)}
+// ensures #[prover=safety] {initialized(result.[0],0,KYBER_N)}
+// requires #[prover=smt] {\all (i \in 0:KYBER_N) (0 <=16u rp[i] && rp[i] <16u 2*KYBER_Q)}
+// ensures  #[prover=smt] {\all (i \in 0:KYBER_N) (0 <=16u result.0[i] && result.0[i] <16u KYBER_Q)}
+// ensures  #[prover=smt] {\all (i \in 0:KYBER_N) (eqsmod64(se_16_64(result.0[i]),se_16_64(rp[i]),(64u)KYBER_Q))} 
+{
+  inline int i;
+  reg u16 t;
+  reg u16 b;
+
+  t = b;
+  t = t;
+  
+  for i = 0 to KYBER_N
+  {
+    t = rp[(int)i];
+    t -= KYBER_Q;
+    b = t;
+    b >>s= 15;
+    b &= KYBER_Q;
+    t += b;
+    rp[(int)i] = t;
+  }
+
+  return rp;
+}

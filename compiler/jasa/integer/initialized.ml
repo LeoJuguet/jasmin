@@ -11,14 +11,24 @@ open Bot
 
 module Init =
   struct
-  type t = bool with_bot
+
+  type init_t =
+    | INIT
+    | MAYBE
+    | NOT_INIT
+
+  type t = init_t with_bot
+
+
+  let pp_init =
+    bot_fprint (fun fmt e -> Format.fprintf fmt "%s" (match e with INIT -> "initialized" | MAYBE -> "maybe" | NOT_INIT -> "not_INIT"))
 
   let print fmt t =
-    unformat (bot_fprint Format.pp_print_bool) ~path:[Key "init"] fmt t
+    unformat (pp_init) ~path:[Key "init"] fmt t
 
 
 
-  let top = Nb false
+  let top = Nb NOT_INIT
 
   let bottom = BOT
 
@@ -26,22 +36,48 @@ module Init =
     | BOT -> true
     | _ -> false
 
-  let join = bot_neutral2 (||)
+  let join = bot_lift2 (fun a1 a2 ->
+      match a1,a2 with
+      | MAYBE,_ | _, MAYBE
+      | NOT_INIT, INIT | INIT, NOT_INIT -> MAYBE
+      | INIT, INIT -> INIT
+      | NOT_INIT, NOT_INIT -> NOT_INIT
+    )
 
-  let meet = bot_absorb2 (fun a1 a2 -> Nb (a1 && a2))
+  let meet = bot_lift2 (fun a1 a2 ->
+      match a1,a2 with
+      | MAYBE,_ | _, MAYBE
+      | NOT_INIT, INIT | INIT, NOT_INIT -> MAYBE
+      | INIT, INIT -> INIT
+      | NOT_INIT, NOT_INIT -> NOT_INIT)
 
   let widen ctx = join
 
-  let subset a1 a2 =
+  let subset =
     bot_included (fun a1 a2 ->
-    a2 || (a1 = a2)) a1 a2
+        match a1, a2 with
+        | INIT, INIT -> true
+        | MAYBE, MAYBE -> true
+        | NOT_INIT, NOT_INIT -> true
+        | _, MAYBE -> true
+        | _, INIT -> false
+        | _, NOT_INIT -> false
+    )
 
 
   let compare a1 a2 =
-    bot_compare (Stdlib.Bool.compare) a1 a2
+    bot_compare (fun a1 a2 -> match a1, a2 with
+        | NOT_INIT, NOT_INIT -> 0
+        | INIT, INIT -> 0
+        | MAYBE, MAYBE -> 0
+        | NOT_INIT, _ -> -1
+        | INIT,_ -> 1
+        | _, NOT_INIT -> 1
+        | _, INIT -> -1
+      ) a1 a2
 
   let is_init t = match t with
-    | Nb true -> true
+    | Nb INIT -> true
     | _ -> false
 
   end
@@ -98,7 +134,7 @@ let () =
       let f : type a. avalue_pool -> a avalue_kind -> Format.formatter -> a -> unit =
         fun next avk fmt av ->
           match avk with
-          | V_jasmin_scalar_initialized -> Bot.bot_fprint (Format.pp_print_bool) fmt av
+          | V_jasmin_scalar_initialized -> Init.pp_init fmt av
           | _ -> next.pool_print avk fmt av
       in f
     );
@@ -115,30 +151,30 @@ let () =
 
 (* Value *)
 module Simplified_Value = struct
-  type t = bool with_bot
+  open Init
+
+  type t = Init.t
 
   let print fmt t =
-    unformat (bot_fprint Format.pp_print_bool) ~path:[Key "init"] fmt t
+    unformat (pp_init) ~path:[Key "init"] fmt t
 
 
 
-  let top = Nb false
+  let top = Init.top
 
-  let bottom = BOT
+  let bottom = Init.bottom
 
   let is_bottom t = match t with
     | BOT -> true
     | _ -> false
 
-  let join = bot_neutral2 (||)
+  let join = Init.join
 
-  let meet = bot_absorb2 (fun a1 a2 -> Nb (a1 && a2))
+  let meet = Init.meet
 
   let widen ctx = join
 
-  let subset a1 a2 =
-    bot_included (fun a1 a2 ->
-    a2 || (a1 = a2)) a1 a2
+  let subset = Init.subset
 
 
   include GenValueId(struct
@@ -149,9 +185,9 @@ module Simplified_Value = struct
   
   let constant c t =
     match c with
-    | C_int _ | C_bool _ -> Nb true
-    | C_top _ -> Nb false (* default value of variables (when S_add is executed) *)
-    | _ -> Nb false
+    | C_int _ | C_bool _ -> Nb INIT
+    | C_top _ -> Nb NOT_INIT (* default value of variables (when S_add is executed) *)
+    | _ -> Nb NOT_INIT
 
   let unop op t x t2=
     x
@@ -228,19 +264,21 @@ module Domain =
       man.eval expr ~translate:"Universal" flow >>$? fun e flow ->
       let aval = mk_avalue_query e V_jasmin_scalar_initialized in
       let is_init = ask_and_reduce man.ask aval flow in
-      let flow' = if Init.is_init is_init then (
-        Debug.debug ~channel:name "Is initialized";
-        Flow.add_safe_check CHK_J_SCALAR_INIT (erange expr) flow
+      (
+        if Init.is_init is_init then begin
+          Debug.debug ~channel:name "Is initialized";
+          Flow.add_safe_check CHK_J_SCALAR_INIT (erange expr) flow
+        end
+        else begin
+          Debug.debug ~channel:name "Is not initialized";
+          let call_stack = Flow.get_callstack flow in
+          let origin = get_orig_expr expr in
+          let alarm = mk_alarm (A_J_Not_Init origin) call_stack (erange expr) in
+          Flow.raise_alarm alarm ~bottom:false  man.lattice flow
+        end
       )
-      else (
-        Debug.debug ~channel:name "Is not initialized";
-        let call_stack = Flow.get_callstack flow in
-        let origin = get_orig_expr expr in
-        let alarm = mk_alarm (A_J_Not_Init origin) call_stack (erange expr) in
-        Flow.raise_alarm alarm ~bottom:false  man.lattice flow
-      ) in
-      man.exec stmt ~route:(Below name) flow'
-    |> OptionExt.return
+      |> man.exec stmt ~route:(Below name)
+      |> OptionExt.return
     | _ -> None
 
   let eval expr man flow = None

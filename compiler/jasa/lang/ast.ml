@@ -681,6 +681,31 @@ let set_target_info info flow =
 
 let get_jasmin_info flow = Flow.get_ctx flow |> find_ctx TargetCtx.key
 
+
+(* ======================================================================  *)
+(*                              Locals vars                                *)
+(* ======================================================================  *)
+
+let find_function prog call =
+  List.find (fun e -> e.f_name = call) prog.functions
+
+let get_locals_var prog =
+  let rec locals_stmt stmt vars=
+    match skind stmt with
+    | S_assign(v1,exp) -> (locals_expr exp (locals_expr exp vars))
+    | S_block(stmt, block) -> List.fold_right locals_stmt stmt (List.fold_right VarSet.add block vars)
+    | S_J_for(v,_,body) -> locals_stmt body (VarSet.add v vars)
+    | S_J_if(c,strue,sfalse) -> locals_stmt sfalse (locals_stmt strue (locals_expr c vars))
+    | S_if (c,strue,sfalse) -> locals_stmt sfalse (locals_stmt strue (locals_expr c vars))
+    | _ -> vars
+  and locals_expr expr vars =
+    match ekind expr with
+    | E_binop(_,e1,e2) -> locals_expr e2 (locals_expr e1 vars)
+    | E_unop(_,e1) -> locals_expr e1 vars
+    | E_var(v,_) -> VarSet.add v vars
+    | _ -> vars
+  in locals_stmt prog VarSet.empty
+
 (* ======================================================================  *)
 (*                              Domains                                    *)
 (* ======================================================================  *)
@@ -701,7 +726,8 @@ module EntryDomainJasmin = struct
         pp_program Format.std_formatter prog;
         printf "init jasmin program\n";
         (* really mandatory ? *)
-        set_jasmin_program jprog flow |> set_target_info (module Arch)
+        set_jasmin_program jprog flow
+        |> set_target_info (module Arch)
     | _ -> flow
 
   let exec stmt man flow =
@@ -710,8 +736,15 @@ module EntryDomainJasmin = struct
         (* List.iter *)
         (*   (fun func -> pp_stmt Format.std_formatter func.f_body) *)
         (*   prog.functions; *)
+
         let prog = (List.hd prog.functions).f_body in
-        man.exec prog flow |> OptionExt.return
+        let locals_vars = VarSet.elements (get_locals_var prog) in
+        (* add vars to values domains *)
+        let range = mk_program_range ["rein a voir "] in
+        let add_vars = List.map (fun v -> mk_add (mk_var {v with vtyp = match vtyp v with
+              T_J_U _ | T_J_Int -> T_int | a -> a} range) range) locals_vars in
+        let new_block = mk_block (add_vars @ [prog])  range in
+        man.exec new_block flow |> OptionExt.return
     | _ -> None
 
   let eval exp man flow = None

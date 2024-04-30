@@ -28,13 +28,13 @@ module JasminFlowDomain = struct
 
   let eval expr man flow =
     match ekind expr with
-    | E_var (v,_) when is_jasmin_scalar (vtyp v) ->
-      (* Add var to environments *)
-      man.eval expr ~translate:"Universal" flow ~route:(Below name) >>$? fun e_univ flow ->
-      man.exec (mk_add e_univ (erange e_univ)) flow ~route:(Below name) >>$? fun _ flow ->
-      Eval.singleton expr flow
-      |> Eval.add_translation "Universal" e_univ
-      |> OptionExt.return
+    (* | E_var (v,_) when is_jasmin_scalar (vtyp v) -> *)
+    (*   (\* Add var to environments *\) *)
+    (*   man.eval expr ~translate:"Universal" flow ~route:(Below name) >>$? fun e_univ flow -> *)
+    (*   man.exec (mk_add e_univ (erange e_univ)) flow ~route:(Below name) >>$? fun _ flow -> *)
+    (*   Eval.singleton expr flow *)
+    (*   |> Eval.add_translation "Universal" e_univ *)
+    (*   |> OptionExt.return *)
     | _ -> None
 
 
