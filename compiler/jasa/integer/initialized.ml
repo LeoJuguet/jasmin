@@ -185,7 +185,7 @@ module Simplified_Value = struct
   
   let constant c t =
     match c with
-    | C_int _ | C_bool _ -> Nb INIT
+    | C_int _ | C_bool _ | C_int_interval _ -> Nb INIT
     | C_top _ -> Nb NOT_INIT (* default value of variables (when S_add is executed) *)
     | _ -> Nb NOT_INIT
 
@@ -195,8 +195,6 @@ module Simplified_Value = struct
   let binop op t x1 t1 x2 t2 = meet x1 x2
 
   let filter b t x = x
-
-  let compare = Bool.compare
 
   include DefaultValueFunctions
 
@@ -248,7 +246,7 @@ let () =
 module Domain =
   struct
     include GenStatelessDomainId(struct
-        let name = "jasmin.integer.domain"
+        let name = "jasmin.integer.init"
       end)
 
   let checks = []
@@ -264,16 +262,17 @@ module Domain =
       man.eval expr ~translate:"Universal" flow >>$? fun e flow ->
       let aval = mk_avalue_query e V_jasmin_scalar_initialized in
       let is_init = ask_and_reduce man.ask aval flow in
+      let range = erange expr in
       (
         if Init.is_init is_init then begin
-          Debug.debug ~channel:name "Is initialized";
-          Flow.add_safe_check CHK_J_SCALAR_INIT (erange expr) flow
+          Debug.debug ~channel:name "%a is initialized" pp_expr expr;
+          Flow.add_safe_check CHK_J_SCALAR_INIT range flow
         end
         else begin
-          Debug.debug ~channel:name "Is not initialized";
+          Debug.debug ~channel:name "%a is not initialized" pp_expr expr;
           let call_stack = Flow.get_callstack flow in
-          let origin = get_orig_expr expr in
-          let alarm = mk_alarm (A_J_Not_Init origin) call_stack (erange expr) in
+          let origin = expr in
+          let alarm = mk_alarm (A_J_Not_Init origin) call_stack range in
           Flow.raise_alarm alarm ~bottom:false  man.lattice flow
         end
       )

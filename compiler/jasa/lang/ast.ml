@@ -548,7 +548,7 @@ type j_func = {
 }
 (** Similar to the jasmin gfunc type but with MOPSA types *)
 
-let declare_args ?(range = mk_program_range []) args =
+let declare_args ?(range = mk_program_range ["dummy range"]) args =
   let open Universal.Ast in
   if List.compare_length_with args 0 = 0 then mk_nop range
   else mk_block (List.map (fun v -> mk_stmt (S_J_declare v) range) args) range
@@ -558,14 +558,15 @@ let jasmin_to_mopsa_func func =
   let open CoreIdent in
   let open Universal.Ast in
   let args = List.map jasmin_to_mopsa_var func.f_args in
+  let range = jasmin_to_mopsa_loc func.f_loc in
   {
     f_name = func.f_name;
     f_tyin = List.map jasmin_to_mopsa_type func.f_tyin;
     f_args = args;
     f_body =
       Lang.Ast.mk_block
-        (declare_args args :: List.map jasmin_to_mopsa_stmt func.f_body)
-        (jasmin_to_mopsa_loc func.f_loc);
+        (declare_args args ~range :: List.map jasmin_to_mopsa_stmt func.f_body)
+        range;
     f_tyout = List.map jasmin_to_mopsa_type func.f_tyout;
     f_ret =
       List.map
@@ -740,7 +741,7 @@ module EntryDomainJasmin = struct
         let prog = (List.hd prog.functions).f_body in
         let locals_vars = VarSet.elements (get_locals_var prog) in
         (* add vars to values domains *)
-        let range = mk_program_range ["rein a voir "] in
+        let range = srange prog in
         let add_vars = List.map (fun v -> mk_add (mk_var {v with vtyp = match vtyp v with
               T_J_U _ | T_J_Int -> T_int | a -> a} range) range) locals_vars in
         let new_block = mk_block (add_vars @ [prog])  range in
