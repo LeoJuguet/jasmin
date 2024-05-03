@@ -76,27 +76,18 @@ module Domain = struct
   let do_check_arithmetic_overflow = ref false
 
   let () =
-    register_domain_option name {
-      key = "-j-check-arithmetic-overflow";
-      doc = "check overflows in integer arithmetic";
-      category = "Jasmin";
-      default = string_of_bool !do_check_arithmetic_overflow;
-      spec = Bool (fun b -> do_check_arithmetic_overflow := b);
-    }
-
-
-
-
-
-
-
-
+    register_domain_option name
+      {
+        key = "-j-check-arithmetic-overflow";
+        doc = "check overflows in integer arithmetic";
+        category = "Jasmin";
+        default = string_of_bool !do_check_arithmetic_overflow;
+        spec = Bool (fun b -> do_check_arithmetic_overflow := b);
+      }
 
   let universal = "Universal"
   let checks = [ CHK_J_OVERFLOW ]
   let init _ _ flow = flow
-
-
 
   let jazz2num jexp =
     let parts, builder = structure_of_expr jexp in
@@ -111,80 +102,83 @@ module Domain = struct
     { e with etyp = T_int }
 
   let check_overflow exp ?(nexp = jazz2num exp) man flow =
-    if not !do_check_arithmetic_overflow then Eval.singleton exp flow |> Eval.add_translation "Universal" nexp
-    else
-      begin
-    Debug.debug ~channel:"Overflow" "overflow start";
-    let typ = etyp exp in
-    let rmin, rmax = Utils.range_of typ in
-    Debug.debug ~channel:"Overflow info" "test range [%a, %a]" Z.pp_print rmin
-      Z.pp_print rmax;
-    let ritv = IntItv.of_z rmin rmax in
-    Debug.debug ~channel:"Overflow" "marker";
-    let itv =
-      ask_and_reduce man.ask
-        (Universal.Numeric.Common.mk_int_interval_query nexp)
-        flow
-    in
-    Debug.debug ~channel:"Overflow" "overflow itv";
-    if IntItv.subset itv ritv then (
-      Debug.debug ~channel:"Overflow info" "safe [%a, %a]" Z.pp_print rmin
+    if not !do_check_arithmetic_overflow then
+      Eval.singleton exp flow |> Eval.add_translation "Universal" nexp
+    else (
+      Debug.debug ~channel:"Overflow" "overflow start";
+      let typ = etyp exp in
+      let rmin, rmax = Utils.range_of typ in
+      Debug.debug ~channel:"Overflow info" "test range [%a, %a]" Z.pp_print rmin
         Z.pp_print rmax;
-      Flow.add_safe_check CHK_J_OVERFLOW (erange exp) flow
-      |> Eval.singleton exp
-      |> Eval.add_translation "Universal" nexp)
-    else
+      let ritv = IntItv.of_z rmin rmax in
+      Debug.debug ~channel:"Overflow" "marker";
       let itv =
         ask_and_reduce man.ask
-          (Universal.Numeric.Common.mk_int_interval_query ~fast:false nexp)
+          (Universal.Numeric.Common.mk_int_interval_query nexp)
           flow
       in
+      Debug.debug ~channel:"Overflow" "overflow itv";
       if IntItv.subset itv ritv then (
-        Debug.debug ~channel:"Overflow info" "safe finally [%a, %a]" Z.pp_print
-          rmin Z.pp_print rmax;
+        Debug.debug ~channel:"Overflow info" "safe [%a, %a]" Z.pp_print rmin
+          Z.pp_print rmax;
         Flow.add_safe_check CHK_J_OVERFLOW (erange exp) flow
         |> Eval.singleton exp
         |> Eval.add_translation "Universal" nexp)
       else
-        let flow' =
-          if IntItv.meet itv ritv |> IntItv.is_bottom then
-            let call_stack = Flow.get_callstack flow in
-            let e2_origine = get_orig_expr exp in
-            let alarm =
-              mk_alarm (A_J_overflow e2_origine) call_stack exp.erange
-            in
-            Flow.raise_alarm alarm ~bottom:false ~warning:true man.lattice flow
-          else
-            let call_stack = Flow.get_callstack flow in
-            let e2_origine = get_orig_expr exp in
-            let alarm =
-              mk_alarm (A_J_overflow e2_origine) call_stack exp.erange
-            in
-            Flow.raise_alarm alarm ~bottom:false ~warning:false man.lattice flow
+        let itv =
+          ask_and_reduce man.ask
+            (Universal.Numeric.Common.mk_int_interval_query ~fast:false nexp)
+            flow
         in
-        Eval.singleton exp flow' |> Eval.add_translation "Universal" nexp
-          end
+        if IntItv.subset itv ritv then (
+          Debug.debug ~channel:"Overflow info" "safe finally [%a, %a]"
+            Z.pp_print rmin Z.pp_print rmax;
+          Flow.add_safe_check CHK_J_OVERFLOW (erange exp) flow
+          |> Eval.singleton exp
+          |> Eval.add_translation "Universal" nexp)
+        else
+          let flow' =
+            if IntItv.meet itv ritv |> IntItv.is_bottom then
+              let call_stack = Flow.get_callstack flow in
+              let e2_origine = get_orig_expr exp in
+              let alarm =
+                mk_alarm (A_J_overflow e2_origine) call_stack exp.erange
+              in
+              Flow.raise_alarm alarm ~bottom:false ~warning:true man.lattice
+                flow
+            else
+              let call_stack = Flow.get_callstack flow in
+              let e2_origine = get_orig_expr exp in
+              let alarm =
+                mk_alarm (A_J_overflow e2_origine) call_stack exp.erange
+              in
+              Flow.raise_alarm alarm ~bottom:false ~warning:false man.lattice
+                flow
+          in
+          Eval.singleton exp flow' |> Eval.add_translation "Universal" nexp)
 
   let rebuild_jazz_expr exp parts =
     let _, builder = structure_of_expr exp in
     builder { exprs = parts; stmts = [] }
 
-  let exec stmt man flow = match skind stmt with
-    | S_assign({ekind = E_var(v,mode)} as lval,expr) when etyp lval |> is_jasmin_scalar  ->
-      let new_var = mk_var ~mode {v with vtyp = T_int} (erange lval) in
-      man.eval ~translate:universal expr flow >>$? fun expr' flow ->
-      Debug.debug ~channel:name "exec assign finish";
-      man.exec (mk_assign new_var expr' (srange stmt)) flow ~route:(Semantic universal) |>
-      OptionExt.return
+  let exec stmt man flow =
+    match skind stmt with
+    | S_assign (({ ekind = E_var (v, mode) } as lval), expr)
+      when etyp lval |> is_jasmin_scalar ->
+        let new_var = mk_var ~mode { v with vtyp = T_int } (erange lval) in
+        man.eval ~translate:universal expr flow >>$? fun expr' flow ->
+        Debug.debug ~channel:name "exec assign finish";
+        man.exec
+          (mk_assign new_var expr' (srange stmt))
+          flow ~route:(Semantic universal)
+        |> OptionExt.return
     | _ -> None
-
-
-
-
 
   let eval expr man flow =
     match ekind expr with
-    | E_var (var, opt) when not (is_universal_type (vtyp var)) && not (is_jasmin_array_type (vtyp var)) ->
+    | E_var (var, opt)
+      when (not (is_universal_type (vtyp var)))
+           && not (is_jasmin_array_type (vtyp var)) ->
         let new_expr = mk_var { var with vtyp = T_int } (erange expr) in
         Eval.singleton expr flow
         |> Eval.add_translation universal new_expr
@@ -235,17 +229,17 @@ module Domain = struct
         |> Eval.add_translation universal new_expr
         |> OptionExt.return
     | E_unop (O_J_int_of_word _, e) ->
-      Debug.debug "is executed";
-      man.eval e ~translate:universal flow >>$? fun e1 flow ->
-      Eval.singleton expr flow
-      |> Eval.add_translation universal { e1 with etyp = T_int}
-      |> OptionExt.return
-    | E_unop (op, e) when is_jasmin_numeric_type (etyp expr)->
-      Debug.debug "is executed";
-      man.eval e ~translate:universal flow >>$? fun e1 flow ->
-      Eval.singleton expr flow
-      |> Eval.add_translation universal e1
-      |> OptionExt.return
+        Debug.debug "is executed";
+        man.eval e ~translate:universal flow >>$? fun e1 flow ->
+        Eval.singleton expr flow
+        |> Eval.add_translation universal { e1 with etyp = T_int }
+        |> OptionExt.return
+    | E_unop (op, e) when is_jasmin_numeric_type (etyp expr) ->
+        Debug.debug "is executed";
+        man.eval e ~translate:universal flow >>$? fun e1 flow ->
+        Eval.singleton expr flow
+        |> Eval.add_translation universal e1
+        |> OptionExt.return
     | _ -> None
 
   let ask _ _ _ = None

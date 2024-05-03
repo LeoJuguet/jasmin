@@ -19,8 +19,7 @@ module Domain = struct
     | S_J_for (var, (dir, start, last), body) ->
         let range = stmt.srange in
 
-        let s = start
-        in
+        let s = start in
         let var = { var with vtyp = T_int } in
         let var = mk_var var range in
         (* forloop initialisation : var = start *)
@@ -38,7 +37,9 @@ module Domain = struct
         (* Condition check by the while *)
         (* TODO maybe switch for only a <= or >= to avoid both *)
         (* last index is not excluded *)
-        let cond = Universal.Ast.mk_in ~right_strict:true var start last range in
+        let cond =
+          Universal.Ast.mk_in ~right_strict:true var start last range
+        in
 
         (* The forloop is translate into an equivalent while loop *)
         let stmt =

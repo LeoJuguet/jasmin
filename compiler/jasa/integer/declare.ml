@@ -37,7 +37,8 @@ module Domain = struct
 
   let exec stmt man flow =
     match skind stmt with
-    | S_J_declare v when is_jasmin_scalar (vtyp v) -> declare_var v (srange stmt) man flow |> OptionExt.return
+    | S_J_declare v when is_jasmin_scalar (vtyp v) ->
+        declare_var v (srange stmt) man flow |> OptionExt.return
     | _ -> None
 
   let eval expr man flow = None

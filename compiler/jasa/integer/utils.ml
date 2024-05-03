@@ -21,9 +21,6 @@ let wsize_to_z wsize = Z.of_int @@ wsize_to_int wsize
 let wsize_to_range wsize =
   (Z.zero, Z.sub (Z.pow (Z.of_int 2) (wsize_to_int wsize)) (Z.of_int 1))
 
-
-
-
 let range_of typ =
   Debug.debug ~channel:"Utils" "%a" pp_typ typ;
   match typ with
