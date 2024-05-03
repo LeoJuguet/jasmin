@@ -249,7 +249,11 @@ module Domain = struct
           (man.eval ~translate:"Universal")
           flow
         >>$? fun args flow ->
-        List.fold_left (fun flow v -> check_is_init v v man flow) flow args
+        List.fold_left
+          (fun flow v ->
+            if is_jasmin_scalar @@ etyp v then check_is_init v v man flow
+            else flow)
+          flow args
         |> Post.return |> OptionExt.return
     | _ -> None
 
