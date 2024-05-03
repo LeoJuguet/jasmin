@@ -13,12 +13,9 @@ fn test(reg u64 a, reg u64 b) -> reg u64, reg u64, reg u64
        b = 0;
     }
 
-	stack u64[9] arr;
-//	ArrayInit(arr);
-   
+	e = c;
+
     c = a + b;
-    arr[b] = c;
-	c = arr[b];
 	
 
 	return e, c, d;

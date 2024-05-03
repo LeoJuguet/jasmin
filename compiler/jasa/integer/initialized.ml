@@ -268,8 +268,12 @@ module Domain =
         Debug.debug ~channel:name "%a is not initialized" pp_expr expr;
         let call_stack = Flow.get_callstack flow in
         let origin = expr in
+        let is_warning = match is_init with
+          | Nb NOT_INIT -> false
+          | _ -> true
+        in
         let alarm = mk_alarm (A_J_Not_Init origin) call_stack range in
-        Flow.raise_alarm alarm ~bottom:false  man.lattice flow
+        Flow.raise_alarm alarm ~bottom:false ~warning:is_warning man.lattice flow
       end
 
 

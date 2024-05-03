@@ -570,6 +570,8 @@ let jasmin_to_mopsa_func func =
   let open Universal.Ast in
   let args = List.map jasmin_to_mopsa_var func.f_args in
   let range = jasmin_to_mopsa_loc func.f_loc in
+  let return_range = mk_tagged_range (String_tag ("return expression of "^func.f_name.fn_name)) (mk_program_range [func.f_loc.loc_fname]) in
+  let declare_range = mk_tagged_range (String_tag ("declaration of arguments for function "^func.f_name.fn_name)) (mk_program_range [func.f_loc.loc_fname]) in
   let ret =
       List.map
         (fun var -> jasmin_to_mopsa_var (Jasmin.Location.unloc var))
@@ -577,7 +579,7 @@ let jasmin_to_mopsa_func func =
   in
   let body =
       Lang.Ast.mk_block
-        (declare_args args ~range :: List.map jasmin_to_mopsa_stmt func.f_body @ if List.length ret = 0 then [] else [mk_stmt (S_J_return ret) range] )
+        (declare_args args ~range:declare_range :: List.map jasmin_to_mopsa_stmt func.f_body @ if List.length ret = 0 then [] else [mk_stmt (S_J_return ret) return_range] )
         range
   in
   {
@@ -633,7 +635,6 @@ let jasmin_parser files =
         prog_kind = Jasmin_Program (mk_jasmin_program (load_file file));
         prog_range = mk_program_range files;
       } in
-    printf "Debug %s" __FUNCTION__;
     ast
   | file :: _ ->
       {
@@ -740,8 +741,8 @@ module EntryDomainJasmin = struct
   let init prog man flow =
     match prog.prog_kind with
     | Jasmin_Program jprog ->
-        pp_program Format.std_formatter prog;
-        printf "init jasmin program\n";
+        Debug.debug ~channel:name "%a" pp_program prog;
+        Debug.debug ~channel:name "init jasmin program\n";
         (* really mandatory ? *)
         set_jasmin_program jprog flow
         |> set_target_info (module Arch)
