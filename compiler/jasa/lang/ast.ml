@@ -10,7 +10,6 @@ module Arch =
        (module Arch_full.Arch_from_Core_arch (C) : Arch_full.Arch))
 
 let load_file name =
-  printf "LOAD FILE FILE FILE \n";
   let open Pretyping in
   try
     name
@@ -192,6 +191,7 @@ type stmt_kind +=
   | S_J_call of expr list (** lvals *) * Jasmin.Prog.funname * expr list
   | S_J_declare of var
         (** Declare the existence of a variable (useful for declare arguments)*)
+  | S_J_return of var list (** returns values *)
 
 let () =
   register_stmt
@@ -205,6 +205,7 @@ let () =
           | S_J_while _, S_J_while _
           | S_J_declare _, S_J_declare _ ->
               0
+          | S_J_return _, S_J_return _ -> 0
           | _ -> next s1 s2);
       print =
         (fun next fmt e ->
@@ -238,6 +239,9 @@ let () =
                 (Jasmin.Utils.pp_list ", " pp_expr)
                 exprs
           | S_J_declare vars -> fprintf fmt "@[declare(@[%a@])@]" pp_var vars
+          | S_J_return vars ->
+            fprintf fmt "@[return @[%a@]@]"
+              (Jasmin.Utils.pp_list ", " pp_var) vars
           | _ -> next fmt e);
     }
 
@@ -332,6 +336,13 @@ let jasmin_to_mopsa_op1 op =
   | Ozeroext (wsize1, wsize2) -> O_J_zeroext (wsize1, wsize2),T_J_U wsize2
   | Oneg op_kind -> O_J_neg (jasmin_to_mopsa_op_kind op_kind),jasmin_to_mopsa_op_kind op_kind
 
+let jasmin_to_mopsa_cmp_kind cmp =
+  let open Universal.Ast in
+  let open Jasmin.Expr in
+  match cmp with
+  | Cmp_int -> T_int
+  | Cmp_w (signe, wsize) -> T_J_U wsize
+
 let jasmin_to_mopsa_op2 op =
   let open Universal.Ast in
   let open Jasmin.Expr in
@@ -344,12 +355,12 @@ let jasmin_to_mopsa_op2 op =
   | Oadd op_kind -> (O_plus, jasmin_to_mopsa_op_kind op_kind)
   | Omul op_kind -> (O_mult, jasmin_to_mopsa_op_kind op_kind)
   | Osub op_kind -> (O_minus, jasmin_to_mopsa_op_kind op_kind)
-  | Odiv cmp_kind -> (O_div, T_int (* failwith "todo op with cmp_kind" *))
-  | Omod cmp_kind -> failwith "todo op with cmp_kind"
+  | Odiv cmp_kind -> (O_div, jasmin_to_mopsa_cmp_kind cmp_kind)
+  | Omod cmp_kind -> (O_mod, jasmin_to_mopsa_cmp_kind cmp_kind)
   | Oland wsize -> (O_bit_and, T_J_U wsize)
   | Olor wsize -> (O_bit_or, T_J_U wsize)
   | Olxor wsize -> (O_bit_xor, T_J_U wsize)
-  | Olsr wsize -> failwith "todo trad op with wsize"
+  | Olsr wsize -> (O_bit_lshift, T_J_U wsize)
   | Olsl op_kind -> (O_bit_lshift, jasmin_to_mopsa_op_kind op_kind)
   | Oasr op_kind -> (O_bit_rshift, jasmin_to_mopsa_op_kind op_kind)
   | Oror wsize -> failwith "todo trad op with wsize"
@@ -559,19 +570,23 @@ let jasmin_to_mopsa_func func =
   let open Universal.Ast in
   let args = List.map jasmin_to_mopsa_var func.f_args in
   let range = jasmin_to_mopsa_loc func.f_loc in
+  let ret =
+      List.map
+        (fun var -> jasmin_to_mopsa_var (Jasmin.Location.unloc var))
+        func.f_ret
+  in
+  let body =
+      Lang.Ast.mk_block
+        (declare_args args ~range :: List.map jasmin_to_mopsa_stmt func.f_body @ if List.length ret = 0 then [] else [mk_stmt (S_J_return ret) range] )
+        range
+  in
   {
     f_name = func.f_name;
     f_tyin = List.map jasmin_to_mopsa_type func.f_tyin;
     f_args = args;
-    f_body =
-      Lang.Ast.mk_block
-        (declare_args args ~range :: List.map jasmin_to_mopsa_stmt func.f_body)
-        range;
+    f_body = body;
     f_tyout = List.map jasmin_to_mopsa_type func.f_tyout;
-    f_ret =
-      List.map
-        (fun var -> jasmin_to_mopsa_var (Jasmin.Location.unloc var))
-        func.f_ret;
+    f_ret = ret
   }
 
 (** Pretty printer for j_func type*)
@@ -698,6 +713,7 @@ let get_locals_var prog =
     | S_J_for(v,_,body) -> locals_stmt body (VarSet.add v vars)
     | S_J_if(c,strue,sfalse) -> locals_stmt sfalse (locals_stmt strue (locals_expr c vars))
     | S_if (c,strue,sfalse) -> locals_stmt sfalse (locals_stmt strue (locals_expr c vars))
+    | S_J_return return_var -> List.fold_right VarSet.add return_var vars
     | _ -> vars
   and locals_expr expr vars =
     match ekind expr with
