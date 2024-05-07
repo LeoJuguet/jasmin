@@ -52,6 +52,14 @@ module Domain = struct
               range)
         in
         man.exec stmt flow |> OptionExt.return
+    | S_J_while (s1, cond, s2) ->
+        let range = srange stmt in
+        let universal_while =
+          mk_block
+            [ s1; mk_while cond (mk_block [ s2; s1 ] (srange s2)) range ]
+            range
+        in
+        man.exec universal_while flow |> OptionExt.return
     | _ -> None
 
   let eval exp man flow = None

@@ -360,7 +360,7 @@ let jasmin_to_mopsa_op2 op =
   | Oland wsize -> (O_bit_and, T_J_U wsize)
   | Olor wsize -> (O_bit_or, T_J_U wsize)
   | Olxor wsize -> (O_bit_xor, T_J_U wsize)
-  | Olsr wsize -> (O_bit_lshift, T_J_U wsize)
+  | Olsr wsize -> (O_bit_rshift, T_J_U wsize)
   | Olsl op_kind -> (O_bit_lshift, jasmin_to_mopsa_op_kind op_kind)
   | Oasr op_kind -> (O_bit_rshift, jasmin_to_mopsa_op_kind op_kind)
   | Oror wsize -> failwith "todo trad op with wsize"
@@ -712,6 +712,7 @@ let get_locals_var prog =
     | S_assign(v1,exp) -> (locals_expr exp (locals_expr exp vars))
     | S_block(stmt, block) -> List.fold_right locals_stmt stmt (List.fold_right VarSet.add block vars)
     | S_J_for(v,_,body) -> locals_stmt body (VarSet.add v vars)
+    | S_J_while(s1,cond,body) -> locals_stmt body @@ locals_expr cond @@ locals_stmt s1 vars
     | S_J_if(c,strue,sfalse) -> locals_stmt sfalse (locals_stmt strue (locals_expr c vars))
     | S_if (c,strue,sfalse) -> locals_stmt sfalse (locals_stmt strue (locals_expr c vars))
     | S_J_return return_var -> List.fold_right VarSet.add return_var vars
@@ -721,6 +722,10 @@ let get_locals_var prog =
     | E_binop(_,e1,e2) -> locals_expr e2 (locals_expr e1 vars)
     | E_unop(_,e1) -> locals_expr e1 vars
     | E_var(v,_) -> VarSet.add v vars
+    | E_J_Laset(_,_,var,expr)
+    | E_J_get(_,_,var,expr)
+    | E_J_sub(_,_,_,var,expr)
+    | E_J_Lasub(_,_,_,var,expr) ->  locals_expr expr (VarSet.add var vars)
     | _ -> vars
   in locals_stmt prog VarSet.empty
 
@@ -750,19 +755,42 @@ module EntryDomainJasmin = struct
 
   let exec stmt man flow =
     match skind stmt with
+    (* | S_program ({ prog_kind = Jasmin_Program prog }, _) -> *)
+    (*     (\* List.iter *\) *)
+    (*     (\*   (fun func -> pp_stmt Format.std_formatter func.f_body) *\) *)
+    (*     (\*   prog.functions; *\) *)
+
+    (*     let prog = (List.hd prog.functions).f_body in *)
+    (*     let locals_vars = VarSet.elements (get_locals_var prog) in *)
+    (*     (\* add vars to values domains *\) *)
+    (*     let range = srange prog in *)
+    (*     let add_vars = List.map (fun v -> mk_add (mk_var {v with vtyp = match vtyp v with *)
+    (*           T_J_U _ | T_J_Int -> T_int | a -> a} range) range) locals_vars in *)
+    (*     let new_block = mk_block (add_vars @ [prog])  range in *)
+    (*     man.exec new_block flow |> OptionExt.return *)
     | S_program ({ prog_kind = Jasmin_Program prog }, _) ->
         (* List.iter *)
         (*   (fun func -> pp_stmt Format.std_formatter func.f_body) *)
         (*   prog.functions; *)
+      Flow.join_list man.lattice
+      ~empty:(fun () -> flow )
+      (
+        List.map (fun prog ->
+            let body = prog.f_body in
+            let locals_vars = VarSet.elements (get_locals_var body) in
+            (* add vars to values domains *)
+            let range = srange body in
+            let add_vars = List.map (fun v -> mk_add (mk_var {v with vtyp = match vtyp v with
+                  T_J_U _ | T_J_Int -> T_int | a -> a} range) range) locals_vars in
+            List.iter (fun v -> Debug.debug ~channel:name "type %a : %a" pp_var v pp_typ (vtyp v)) locals_vars;
+            let new_block = mk_block (add_vars @ [body])  range in
+            man.exec new_block flow |> post_to_flow man
+            |> Flow.remove T_cur
+          ) prog.functions
+      )
+    |> Post.return
+    |> OptionExt.return
 
-        let prog = (List.hd prog.functions).f_body in
-        let locals_vars = VarSet.elements (get_locals_var prog) in
-        (* add vars to values domains *)
-        let range = srange prog in
-        let add_vars = List.map (fun v -> mk_add (mk_var {v with vtyp = match vtyp v with
-              T_J_U _ | T_J_Int -> T_int | a -> a} range) range) locals_vars in
-        let new_block = mk_block (add_vars @ [prog])  range in
-        man.exec new_block flow |> OptionExt.return
     | _ -> None
 
   let eval exp man flow = None
@@ -784,8 +812,6 @@ let () = register_frontend { lang = "Jasmin"; parse = jasmin_parser }
 let is_jasmin_scalar typ = match typ with
   | T_bool | T_int | T_J_U _ -> true
   | _ -> false
-
-
 
 let is_jasmin_array_type typ = match typ with
   | T_J_Array _ -> true
