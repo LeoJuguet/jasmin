@@ -35,6 +35,9 @@
 					{	
 					"nonrel" :	"jasmin.integer.initialized"
 					},
+					{	
+					"nonrel" :	"jasmin.array.values.init"
+					},
 					{
 						"nonrel": 
 								"universal.numeric.values.intervals.integer"
