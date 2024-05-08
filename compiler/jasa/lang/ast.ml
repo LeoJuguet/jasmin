@@ -709,7 +709,7 @@ let find_function prog call =
 let get_locals_var prog =
   let rec locals_stmt stmt vars=
     match skind stmt with
-    | S_assign(v1,exp) -> (locals_expr exp (locals_expr exp vars))
+    | S_assign(v1,exp) -> (locals_expr exp (locals_expr v1 vars))
     | S_block(stmt, block) -> List.fold_right locals_stmt stmt (List.fold_right VarSet.add block vars)
     | S_J_for(v,_,body) -> locals_stmt body (VarSet.add v vars)
     | S_J_while(s1,cond,body) -> locals_stmt body @@ locals_expr cond @@ locals_stmt s1 vars
