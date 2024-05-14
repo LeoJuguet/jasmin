@@ -1,0 +1,17 @@
+
+fn test()
+{
+	reg u64 a;
+	reg u64 b;
+	inline int i;
+
+	for i = 0 to 256 {
+		if i == 25 {
+			a = 25;
+		}
+
+		if i == 20 {
+			b = a;
+		}		
+	}
+}

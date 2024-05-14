@@ -10,6 +10,7 @@ end
 
 type uid = Uint63.t
 let string_of_uid = Uint63.to_string
+let hash_of_uid = Uint63.hash
 
 (* ------------------------------------------------------------------------ *)
 type base_ty =

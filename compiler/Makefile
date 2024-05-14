@@ -5,7 +5,19 @@ JSJOBS    ?= 2
 CHECKPY   ?=
 CHECK     := $(CHECKPY) scripts/runtest --jobs="$(JSJOBS)"
 CHECK     += config/tests.config
-CHECKCATS ?= safety CCT x86-64-ATT x86-64-Intel x86-64-print x86-64-nolea arm-m4 arm-m4-print
+CHECKCATS ?= \
+	safety \
+	CCT \
+	x86-64-ATT \
+	x86-64-Intel \
+	x86-64-print \
+	x86-64-nolea \
+	arm-m4 \
+	arm-m4-print \
+	x86-64-stack-zero-loop \
+	x86-64-stack-zero-unrolled \
+	arm-m4-stack-zero-loop \
+	arm-m4-stack-zero-unrolled
 
 # --------------------------------------------------------------------
 DESTDIR  ?=
@@ -23,7 +35,7 @@ OBELISK ?= obelisk
 
 # --------------------------------------------------------------------
 .PHONY: all build byte native CIL check check-ci __force__
-.PHONY: clean install uninstall dist
+.PHONY: clean install uninstall dist jasa
 .PHONY: %.ml %.mli %.inferred.mli
 
 .PRECIOUS: _c_build/%.s _c_build/%.o
@@ -35,12 +47,9 @@ build: native
 
 define do-build
 	$(RM) jasminc jazz2tex
-	dune build @check entry/jasminc.$(1)
-	dune build @check entry/jazz2tex.$(1)
-	dune build @check entry/jazz2cl.$(1)
+	dune build @check entry/jasminc.$(1) entry/jazz2tex.$(1)
 	ln -sf "_build/default/entry/jasminc.$(1)" jasminc
 	ln -sf "_build/default/entry/jazz2tex.$(1)" jazz2tex
-	ln -sf "_build/default/entry/jazz2cl.$(1)" jazz2cl
 endef
 
 byte:
@@ -48,6 +57,11 @@ byte:
 
 native:
 	$(call do-build,exe)
+
+jasa:
+	$(RM) jasa.exe
+	dune build jasa
+	ln -sf "_build/default/jasa/jasa.exe" jasa.exe
 
 CIL:
 	rm -f src/CIL/*.ml src/CIL/*.mli ../proofs/extraction.vo
@@ -64,18 +78,16 @@ check-ci:
 clean:
 	dune clean
 	rm -rf _c_build
-	rm -f jasminc jazz2tex jazz2cl lib*.a
+	rm -f jasminc jazz2tex lib*.a
 
 install:
 	$(INSTALL) -m 0755 -d $(DESTDIR)$(BINDIR)
 	$(INSTALL) -m 0755 -T jasminc $(DESTDIR)$(BINDIR)/jasminc
 	$(INSTALL) -m 0755 -T jazz2tex $(DESTDIR)$(BINDIR)/jazz2tex
-	$(INSTALL) -m 0755 -T jazz2cl $(DESTDIR)$(BINDIR)/jazz2cl
 
 uninstall:
 	$(RM) $(DESTDIR)$(BINDIR)/jasminc
 	$(RM) $(DESTDIR)$(BINDIR)/jazz2tex
-	$(RM) $(DESTDIR)$(BINDIR)/jazz2cl
 
 # --------------------------------------------------------------------
 dist: $(DISTDIR).tgz
