@@ -38,6 +38,11 @@ all:
 	dune build @check @install
 	for p in _build/install/default/bin/*; do ln -sf $$p $$(basename $$p); done
 
+jasa:
+	$(RM) jasa.exe
+	dune build jasa
+	ln -sf "_build/default/jasa/jasa.exe" jasa.exe
+
 CIL:
 	$(RM) -f src/CIL/*.ml src/CIL/*.mli ../proofs/extraction.vo
 	$(MAKE) -C ../proofs extraction

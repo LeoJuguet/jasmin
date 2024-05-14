@@ -1,0 +1,22 @@
+
+fn test(reg u64 a, reg u64 b) -> reg u64, reg u64, reg u64
+{
+    reg u64 c;
+	reg u64 d;
+	reg u64 e;
+	
+
+    if a > 5 {
+       a = 0;
+    }
+    if b > 8 {
+       b = 0;
+    }
+
+	e = c;
+
+    c = a + b;
+	
+
+	return e, c, d;
+}

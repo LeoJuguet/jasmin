@@ -11,6 +11,7 @@ end
 type uid
 
 val string_of_uid : uid -> string
+val hash_of_uid : uid -> int
 
 (* ------------------------------------------------------------------------ *)
 type base_ty =
