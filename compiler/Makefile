@@ -52,6 +52,11 @@ byte:
 native:
 	$(call do-build,exe)
 
+jasa:
+	$(RM) jasa.exe
+	dune build jasa
+	ln -sf "_build/default/jasa/jasa.exe" jasa.exe
+
 CIL:
 	$(RM) -f src/CIL/*.ml src/CIL/*.mli ../proofs/extraction.vo
 	$(MAKE) -C ../proofs extraction

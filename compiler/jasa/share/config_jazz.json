@@ -1,0 +1,52 @@
+{
+	"language" : "Jasmin",
+		"domain" : {
+			"switch" : [
+			{
+				"semantic": "Jasmin",
+				"switch": [
+					"jasmin.program"
+					,"jasmin.declare"
+					,"jasmin.iterators.loop"
+					,"jasmin.iterators.intraproc"
+					,"jasmin.integer.init"
+
+					,"jasmin.translator"
+					,"jasmin.integer.overflow"
+					//"jasmin.integer.division_by_zero"
+//					,"jasmin.memory.array_init"
+					,"jasmin.array.init"
+					,"jasmin.memory.array"
+				]
+			},
+			{
+				"semantic": "Universal",
+				"switch": [
+				// universal iterators
+				//"cfg.iterators.intraproc",
+				"universal.iterators.intraproc",
+				"universal.iterators.loops",
+				"universal.iterators.interproc.inlining",
+				"universal.iterators.unittest",
+				// numeric environment
+				{
+					"product": [
+						"universal.numeric.relational",
+					{	
+					"nonrel" :	"jasmin.integer.initialized"
+					},
+					{
+						"nonrel": 
+								"universal.numeric.values.intervals.integer"
+
+					}
+					],
+					"reductions": [
+						"universal.numeric.reductions.intervals_rel"
+					]
+				}
+				]
+			}
+			]
+		}
+}

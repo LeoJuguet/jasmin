@@ -1,0 +1,8 @@
+(include_subdirs unqualified)
+
+(executable
+ (name jasa)
+ (public_name jasa)
+ (flags -rectypes -linkall)
+ (modes byte exe)
+ (libraries jasmin mopsa.mopsa_analyzer))
