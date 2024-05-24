@@ -103,7 +103,7 @@ let () =
       print =
         (fun next fmt e ->
           match ekind e with
-          | E_J_arr_init _ -> fprintf fmt "array init"
+          | E_J_arr_init len -> fprintf fmt "ArrayInit(%i)" len
           | E_J_get (arr_access, wsize, var, expr) ->
               fprintf fmt "@[get(%a, %a)@]" pp_var var pp_expr expr
           | E_J_sub (arr_access, wsize, len, var, expr) ->
@@ -166,6 +166,7 @@ let () =
                 | { exprs = [ expr ]; stmts = [] } ->
                     { expr with ekind = E_J_Laset (arr, wsize, var, expr) }
                 | _ -> assert false )
+          | E_J_arr_init len -> leaf expr
           | _ ->
               default expr);
     }
@@ -231,7 +232,7 @@ let () =
           | S_J_if (cond, expr_true, expr_false) ->
               fprintf fmt "@[if(%a){@\n@ @ %a@\n}else{@\n@ @ %a@\n}@]" pp_expr
                 cond pp_stmt expr_true pp_stmt expr_false
-          | S_J_while _ -> fprintf fmt "while@\n"
+          | S_J_while(pre,cond,loop) -> fprintf fmt "@[while(%a){@\n@ @ %a@\n}(%a)@]" pp_expr cond pp_stmt loop pp_stmt pre
           | S_J_call (lvals, call, exprs) ->
               fprintf fmt "@[call(@[%a@], %s ,@[%a@])@]"
                 (Jasmin.Utils.pp_list ", " pp_expr)
@@ -282,8 +283,8 @@ let () = register_operator {
       );
     print = (fun default fmt op ->
       match op with
-        | O_J_word_of_int wsize -> Format.fprintf fmt "word_of_int"
-        | O_J_int_of_word wsize -> Format.fprintf fmt "int_of_word"
+        | O_J_word_of_int wsize -> Format.fprintf fmt "word%s_of_int" (string_of_wsize wsize)
+        | O_J_int_of_word wsize -> Format.fprintf fmt "int_of_word%s" (string_of_wsize wsize)
         | O_J_signext (wsize,wsize2) -> Format.fprintf fmt "signext"
         | O_J_zeroext (wsize,wsize2) -> Format.fprintf fmt "zeroext"
         | O_J_not -> Format.fprintf fmt "J_not"
@@ -391,6 +392,7 @@ let rec jasmin_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ])
   | Pvar var -> mk_var (jasmin_to_mopsa_var var.gv.pl_desc) range
   | Pget (warray, wsize, var, expr) ->
       mk_expr
+        ~etyp:(T_J_U wsize)
         (E_J_get
            ( warray,
              wsize,
@@ -434,6 +436,7 @@ let rec jasmin_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ])
              jasmin_to_mopsa_expr ~range expr_true,
              jasmin_to_mopsa_expr ~range expr_false ))
         range
+  | _ -> failwith "expr not yet supported"
 
 and jasmin_lval_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ])
     lval =
@@ -546,8 +549,9 @@ let rec jasmin_to_mopsa_stmt instr =
 (* TODO translate fields commented *)
 
 type j_func = {
-  (* f_loc *)
+  f_loc : range;
   (* f_annot *)
+  (* f_contra *)
   (* f_cc not useful for the analysis ? *)
   f_name : Prog.funname;
   f_tyin : typ list;
@@ -583,6 +587,7 @@ let jasmin_to_mopsa_func func =
         range
   in
   {
+    f_loc = range ;
     f_name = func.f_name;
     f_tyin = List.map jasmin_to_mopsa_type func.f_tyin;
     f_args = args;
@@ -827,4 +832,8 @@ let is_jasmin_numeric_type typ = match typ with
 
 let get_array_type_len typ = match typ with
   | T_J_Array (_, len) -> len
+  | _ -> panic ~loc:__FILE__ "%a is not a T_J_Array type" pp_typ typ
+
+let get_array_type_wsize typ = match typ with
+  | T_J_Array (wsize, len) -> wsize
   | _ -> panic ~loc:__FILE__ "%a is not a T_J_Array type" pp_typ typ

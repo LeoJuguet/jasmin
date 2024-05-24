@@ -1,10 +1,10 @@
 
 
-export fn test_array(reg u64 entry1 entry2) -> reg ptr u64[2]
+fn test_array(reg u64 entry1 entry2) -> reg ptr u64[2]
 {
     reg u64 a;
     reg u32 c;
-    reg ptr u64[2] arr;
+    reg u64[2] arr;
 
     arr[0] = entry1;
     arr[1] = entry2;
