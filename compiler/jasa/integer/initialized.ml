@@ -19,6 +19,10 @@ module Init = struct
           | MAYBE -> "maybe"
           | NOT_INIT -> "not init"))
 
+  let init = Nb INIT
+  let maybe = Nb MAYBE
+  let not_init = Nb NOT_INIT
+
   let print fmt t = unformat pp_init ~path:[ Key "init" ] fmt t
   let top = Nb NOT_INIT
   let bottom = BOT
