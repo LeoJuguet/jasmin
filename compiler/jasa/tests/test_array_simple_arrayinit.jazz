@@ -1,0 +1,13 @@
+fn test()
+{
+	reg ptr u32[5] a;
+	reg u32 b;
+	inline int i;
+
+
+	for i = 0 to 5 {
+		a[i] = i;
+	}
+	ArrayInit(a);
+	b = a[4];
+}
