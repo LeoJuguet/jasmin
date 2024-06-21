@@ -1,10 +1,7 @@
 /* safety annotations */
 
 abstract predicate bool init_array(int,int,int); /* #parameter, offset, len */
-abstract predicate bool init_memory(u64,int,int); /* ptr, offset, len */
-abstract predicate bool valid_memory(u64,int,int); /* ptr, offset, len */
 abstract predicate bool assigns_array(int,int,int); /* #result, offset, len */
-abstract predicate bool assigns_memory(u64,int,int); /* ptr, offset, len */
 
 /* require "params.jinc" */
 
@@ -133,8 +130,8 @@ ensures {assigns_array(0,0,KYBER_N)}
   return rp;
 }
 
-param int DMONT   = 1353;      /* (1ULL << 32) % KYBER_Q */
 
+param int DMONT   = 1353;      /* (1ULL << 32) % KYBER_Q */
 
 fn _i_poly_frommsg(reg ptr u16[KYBER_N] rp, reg ptr u8[32] ap) -> stack u16[KYBER_N]
 requires {init_array(0,0,32)}
@@ -199,8 +196,6 @@ ensures {assigns_array(0,0,KYBER_N)}
   }
   return rp;
 }
-
-
 
 
 fn _poly_sub(reg ptr u16[KYBER_N] rp ap bp) -> reg ptr u16[KYBER_N]
