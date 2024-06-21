@@ -106,9 +106,9 @@ struct
 
   let eval expr man flow =
     let range = erange expr in
+    let open Universal.Numeric.Common in
     match ekind expr with
     | E_J_get(access,wsize, var, index) ->
-      let open Universal.Numeric.Common in
       man.eval ~translate:"Universal" index flow >>$? fun index_univ flow ->
       let index_interval = ask_and_reduce man.ask (mk_int_interval_query ~fast:false index_univ) flow in
       let array_init = mk_var (mk_init_array var) range in
@@ -125,9 +125,32 @@ struct
         Flow.add_alarm ~warning:true alarm man.lattice flow)
       else
         Flow.add_safe_check CHK_J_NOT_INIT_ARRAY range flow)
-    |> man.eval expr ~route:(Below name)
-    |> OptionExt.return
-    | _ -> None
+      |> man.eval expr ~route:(Below name)
+      |> OptionExt.return
+    | E_stub_J_abstract (Init_array, [evar; i1; i2]) ->
+    begin
+      match ekind evar with
+      | E_var (var, mode) ->
+        man.eval ~translate:"Universal" i1 flow >>$? fun i1_univ flow ->
+        let i1_interval = ask_and_reduce man.ask (mk_int_interval_query ~fast:false i1_univ) flow in
+        man.eval ~translate:"Universal" i2 flow >>$? fun i2_univ flow ->
+        let i2_interval = ask_and_reduce man.ask (mk_int_interval_query ~fast:false i2_univ) flow in
+        let array_init = mk_var (mk_init_array var) range in
+        let array_no_init_interval = ask_and_reduce man.ask (mk_int_interval_query ~fast:false array_init) flow in
+        let wsize = B.of_int @@ Utils.wsize_to_int @@ get_array_type_wsize @@ vtyp var in
+        let scale_index_interval = match i1_interval, i2_interval with
+          | Nb (li,hi), Nb (li2,hi2) -> Nb (B.mul (B.min li li2) wsize, B.mul (B.max hi hi2) wsize)
+          | _ -> BOT
+        in
+        let is_init_expr = mk_bool (I.intersect_bot scale_index_interval array_no_init_interval) range in
+        Eval.singleton is_init_expr flow
+        |> OptionExt.return
+      | _ -> Debug.debug ~channel:name "problem HERE HERE"; None
+    end
+
+    | _ ->
+      Debug.debug ~channel:name "%a" pp_expr expr;
+     None
 
 
   let update_is_init is_init wsize ?(len = 1) var index value range man flow=
@@ -189,7 +212,20 @@ struct
       let wsize = Utils.wsize_to_int @@ get_array_type_wsize (vtyp var) in
       man.exec (mk_assign (mk_var (mk_init_array var) range) (mk_int_interval 0 (len * wsize) range) range) flow
     |> OptionExt.return
-    | _ -> None
+    | S_assume { ekind = E_stub_J_abstract (Init_array, args) } ->
+      Debug.debug "%a" pp_stmt stmt;
+      Post.return flow
+      |> OptionExt.return
+    (* | S_assume { ekind = E_unop (O_log_not, { ekind = E_stub_J_abstract (Init_array, args)}) } -> *)
+    (*   Post.return flow *)
+    (*   |> OptionExt.return *)
+    | S_remove ({ekind = E_var(var,mode)} as v) when is_jasmin_array_type @@ etyp v ->
+      man.exec (mk_remove_var (mk_init_array var) range) flow
+      |> OptionExt.return
+
+    | _ ->
+      Debug.debug "%a" pp_stmt stmt;
+      None
 
 
   let ask : type r. ('a, r) query -> _ man -> _ flow -> ('a, r) cases option  =
