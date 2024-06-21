@@ -1,9 +1,7 @@
 /* safety annotations */
 
 abstract predicate bool init_array(int,int,int); /* #parameter, offset, len */
-abstract predicate bool init_scalar(int); /* #parameter, offset, len */
 abstract predicate bool assigns_array(int,int,int); /* #result, offset, len */
-abstract predicate bool assigns_scalar(int); /* #result */
 
 /* require "params.jinc" */
 
@@ -32,8 +30,6 @@ param int BARR    = 20159;     /* (1U << 26)/KYBER_Q + 1 */
 
 
 inline fn __fqmul(reg u16 a b) -> reg u16
-requires {init_scalar(0) && init_scalar(1)}
-ensures {init_scalar(0)}
 {
   reg u32 ad bd c t u;
   reg u16 r;
@@ -55,8 +51,6 @@ ensures {init_scalar(0)}
 
 inline
 fn __barrett_reduce(reg u16 a) -> reg u16
-requires {init_scalar(0)}
-ensures {assigns_scalar(0)}
 {
   reg u32 t;
   reg u16 r;

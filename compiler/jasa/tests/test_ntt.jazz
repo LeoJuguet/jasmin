@@ -1,9 +1,7 @@
 /* safety annotations */
 
 abstract predicate bool init_array(int,int,int); /* #parameter, offset, len */
-abstract predicate bool init_scalar(int); /* #parameter, offset, len */
 abstract predicate bool assigns_array(int,int,int); /* #result, offset, len */
-abstract predicate bool assigns_scalar(int); /* #result */
 
 /* require "params.jinc" */
 
@@ -32,8 +30,6 @@ param int BARR    = 20159;     /* (1U << 26)/KYBER_Q + 1 */
 
 
 inline fn __fqmul(reg u16 a b) -> reg u16
-requires {init_scalar(0) && init_scalar(1)}
-ensures {init_scalar(0)}
 {
   reg u32 ad bd c t u;
   reg u16 r;
@@ -55,8 +51,6 @@ ensures {init_scalar(0)}
 
 inline
 fn __barrett_reduce(reg u16 a) -> reg u16
-requires {init_scalar(0)}
-ensures {assigns_scalar(0)}
 {
   reg u32 t;
   reg u16 r;
@@ -92,135 +86,87 @@ u16[128] jzetas_inv = {1701, 1807, 1460, 2371, 2338, 2333, 308, 108, 2851, 870, 
                        1571, 205, 2918, 1542, 2721, 2597, 2312, 681, 130, 1602, 1871, 829, 2946, 3065, 1325, 2756, 
                        1861, 1474, 1202, 2367, 3147, 1752, 2707, 171, 3127, 3042, 1907, 1836, 1517, 359, 758, 1441};
 
-fn _poly_add2(reg ptr u16[KYBER_N] rp bp) -> stack u16[KYBER_N]
-requires {init_array(0,0,KYBER_N) && init_array(1,0,KYBER_N)}
-ensures {assigns_array(0,0,KYBER_N)}
-{
-  reg u16 a;
-  reg u16 b;
-  reg u16 r;
-  reg u64 i;
 
-  i = 0;
 
-  while (i < KYBER_N) {
-    a = rp[(int)i];
-    b = bp[(int)i];
-    r = a + b;
-    rp[(int)i] = r;
-    i += 1;
-  }
-  return rp;
-}
-
-fn _poly_csubq(reg ptr u16[KYBER_N] rp) -> reg ptr u16[KYBER_N]
+inline
+fn __poly_reduce(reg ptr u16[KYBER_N] rp) -> reg ptr u16[KYBER_N]
 requires {init_array(0,0,KYBER_N)}
 ensures {assigns_array(0,0,KYBER_N)}
 {
-  reg u64 i;
+  reg u64 j; 
   reg u16 t;
-  reg u16 b;
-
-  i = 0;
-  while (i < KYBER_N)
+  j = 0;
+  while (j < KYBER_N) 
   {
-    t = rp[(int)i];
-    t -= KYBER_Q;
-    b = t;
-    b >>s= 15;
-    b &= KYBER_Q;
-    t += b;
-    rp[(int)i] = t;
-    i += 1;
+    t = rp[(int)j];
+    t = __barrett_reduce(t);
+    rp[(int)j] = t;
+    j += 1;
   }
   return rp;
 }
+
+
+
 
 
 param int DMONT   = 1353;      /* (1ULL << 32) % KYBER_Q */
 
-fn _i_poly_frommsg(reg ptr u16[KYBER_N] rp, reg ptr u8[32] ap) -> stack u16[KYBER_N]
-requires {init_array(0,0,32)}
+
+
+
+
+
+fn _poly_ntt(reg ptr u16[KYBER_N] rp) -> reg ptr u16[KYBER_N]
+requires {init_array(0,0,KYBER_N)}
 ensures {assigns_array(0,0,KYBER_N)}
 {
-  reg u8 c;
+  reg u64 len;  
+  reg u64 start;
+  reg u64 j;
+  reg u64 cmp;
+  reg u64 offset;
+  
+  reg u16 zeta;
   reg u16 t;
-  inline int i;
-  inline int j;
+  reg u16 s;
+  reg u16 m;
 
-  for i = 0 to 32
+  reg ptr u16[128] zetasp;
+  reg u64 zetasctr;
+
+  zetasp = jzetas;
+  zetasctr = 0;
+  len = 128;
+  while (len >= 2)
   {
-    c = ap[i];
-
-    t = (16u)c; 
-    t &= 1;
-    t *= (KYBER_Q+1)/2;
-    rp[8*i] = t;
-    c >>= 1;
-
-    t = (16u)c; 
-    t &= 1;
-    t *= (KYBER_Q+1)/2;
-    rp[8*i+1] = t;
-    c >>= 1;
-
-    t = (16u)c; 
-    t &= 1;
-    t *= (KYBER_Q+1)/2;
-    rp[8*i+2] = t;
-    c >>= 1;
-
-    t = (16u)c; 
-    t &= 1;
-    t *= (KYBER_Q+1)/2;
-    rp[8*i+3] = t;
-    c >>= 1;
-
-    t = (16u)c; 
-    t &= 1;
-    t *= (KYBER_Q+1)/2;
-    rp[8*i+4] = t;
-    c >>= 1;
-
-    t = (16u)c; 
-    t &= 1;
-    t *= (KYBER_Q+1)/2;
-    rp[8*i+5] = t;
-    c >>= 1;
-
-    t = (16u)c; 
-    t &= 1;
-    t *= (KYBER_Q+1)/2;
-    rp[8*i+6] = t;
-    c >>= 1;
-
-    t = (16u)c; 
-    t &= 1;
-    t *= (KYBER_Q+1)/2;
-    rp[8*i+7] = t;
-    c >>= 1;
+    start = 0;
+    while (start < 256)
+    {
+      zetasctr += 1;
+      zeta = zetasp[(int)zetasctr];
+      j = start;
+      cmp = start + len;
+      while (j < cmp)
+      {
+        offset = j + len;
+        t = rp[(int)offset];
+        t = __fqmul(t, zeta);
+        s = rp[(int)j];
+        m = s;
+        m -= t;
+        rp[(int)offset] = m;
+        t += s;
+        rp[(int)j] = t;
+        j += 1;
+      }
+      start = j + len;
+    }
+    len >>= 1;
   }
-  return rp;
-}
 
+  rp = __poly_reduce(rp);
 
-fn _poly_sub(reg ptr u16[KYBER_N] rp ap bp) -> reg ptr u16[KYBER_N]
-requires {init_array(0,0,KYBER_N) && init_array(1,0,KYBER_N)}
-ensures {assigns_array(0,0,KYBER_N)}
-{
-  reg u16 a;
-  reg u16 b;
-  reg u16 r;
-  reg u64 i;
-
-  i = 0;
-  while (i < KYBER_N) {
-    a = ap[(int)i];
-    b = bp[(int)i];
-    r = a - b;
-    rp[(int)i] = r;
-    i += 1;
-  }
   return rp;
 }
 
