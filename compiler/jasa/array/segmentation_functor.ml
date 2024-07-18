@@ -69,12 +69,109 @@ let () =
   }
 
 
+module Bound = struct
+  (* cst * var + cst *)
+  type t = Z.t * var option * Z.t
+
+  let mk_bound a b c range =
+    (a, b, c, range)
+
+
+
+  let binop op e1 e2 = match op, e1, e2 with
+    | O_plus, (a1,None,c1), (a2, None, c2) ->
+      (Z.zero, None, c1 + c2)
+    | O_minus, (a1,None,c1), (a2, None, c2) ->
+      (Z.zero, None, c1 - c2)
+
+
+  let rec expr_to_bound expr = match ekind expr with
+    | E_constant (C_int i) when is_numeric_type (etyp expr) ->
+      Some (Z.zero, None, i)
+    | E_binop (O_plus, e1, e2) -> 
+      let e1 = expr_to_bound e1 in
+      let e2 = expr_to_bound e2 in
+    None  
+    | _ -> None
+        
+
+
+
+end
+
+
+
+module Bounds = struct
+
+  module B = ExprSet
+
+  type t = ExprSet.t
+
+
+  let subset a b =
+    B.subset a b
+
+  let join a b = B.union a b
+
+  let widen a b = join a b
+
+  let remove_var var t =
+    B.filter (fun expr -> is_var_in_expr var expr) t
+
+  let substitue var new_expr t =
+    B.map (fun expr -> 
+      Visitor.map_expr (fun expr -> 
+        match ekind expr with
+        | E_var(v,mode) when compare_var v var = 0 ->
+            Keep new_expr
+        | _ -> VisitParts expr
+      ) (fun a -> Keep a) expr
+    ) t
+
+  let choose t =
+    B.choose t
+
+  let singleton t =
+    B.singleton t
+
+  let diff a b =
+    B.diff a b
+
+  let is_empty b =
+    B.is_empty b
+
+  let meet a b =
+    B.inter a b
+
+
+
+  let rec normalize e =
+    Visitor.map_expr 
+      (fun expr -> match ekind expr with  
+      | E_binop (op, e1,e2) -> Keep expr
+      
+      |_ -> Keep expr) 
+    
+      (fun stmt -> Keep stmt) e
+
+  
+
+  let fprint fmt a =
+    B.fprint { print_empty = "{}"; print_begin = "{"; print_sep = "," ; print_end = "}"  } pp_expr fmt a 
+
+
+end
+
+
+
 module ArraySegment = struct
 
 
     module Element = Framework.Lattices.Powerset.Make(Var)
 
     module Bounds = Framework.Lattices.Powerset.Make(Var)
+
+    module Bounds2 = Bounds
   
     type t = {
           bounds : (Bounds.t * Present.t) ListExt.t;
@@ -87,7 +184,7 @@ module ArraySegment = struct
       }
 
     let top = {
-        bounds = [(Bounds.top, Present.MAYBE_EMPTY)];
+        bounds = [];
         segments = []      
       }
 
@@ -144,10 +241,10 @@ module ArraySegment = struct
 
     let fprint_array_segments fmt a =
       iter (fun (bounds, present) element ->
-            Format.fprintf fmt "[%a]%a %a " (format Bounds.print) bounds Present.fprint_present present (format Element.print) element 
+            Format.fprintf fmt "%a%a [%a] " (format Bounds.print) bounds Present.fprint_present present (format Element.print) element 
           )
           ~flast:(fun (bounds, present) ->
-            Format.fprintf fmt "[%a]%a" (format Bounds.print) bounds Present.fprint_present present
+            Format.fprintf fmt "%a%a" (format Bounds.print) bounds Present.fprint_present present
           )
           a
 
@@ -158,6 +255,7 @@ module ArraySegment = struct
     let get_bounds bounds =
       let b = Bounds.choose bounds in
       mk_var b dummy_range
+      (* b *)
     
 
     (* Useful command *)
@@ -198,13 +296,14 @@ module ArraySegment = struct
       parcours a.bounds a.segments Element.empty flow 
 
     let mk_segment_array_index_bounds arr i range man flow = 
-      match ekind i with
-      | E_var (v,mode) -> Cases.return (Bounds.singleton v) flow
-      | _ ->
-        let v = mkv_bounds arr in
-        let ex = mk_assign (mk_var v range) i range in 
-        man.exec ex flow >>$ fun out flow -> 
-        Cases.return (Bounds.singleton v) flow
+      Cases.return (Bounds.singleton i) flow
+      (* match ekind i with *)
+      (* | E_var (v,mode) -> Cases.return (Bounds.singleton v) flow *)
+      (* | _ -> *)
+        (* let v = mkv_bounds arr in *)
+        (* let ex = mk_assign (mk_var v range) i range in *) 
+        (* man.exec ex flow >>$ fun out flow -> *) 
+        (* Cases.return (Bounds.singleton v) flow *)
 
     let mk_segment_array_element arr range man flow = 
         let v = mkv_element arr in
@@ -316,7 +415,7 @@ module ArraySegment = struct
         (* Cases.return (bounds, segments) flow *)
       in 
       parcours a.bounds a.segments Element.empty ~is_lower:true flow >>$ fun (bounds, segments) flow ->
-      List.iter (fun (b,_) -> Debug.debug ~channel:"set" "b: %a" (Print.format Bounds.print) b) bounds;
+      List.iter (fun (b,_) -> Debug.debug ~channel:"set" "b: %a" Bounds.fprint b) bounds;
       List.iter (fun b -> Debug.debug ~channel:"set" "e: %a" (Print.format Element.print) b) segments;
       Cases.return {bounds; segments} flow
 
@@ -404,7 +503,7 @@ module Domain = struct
     let segment_unification_range = tag_range (mk_fresh_range ()) "segment-unification"
 
     let get_bar bound bound_list = 
-      List.fold_left (fun b1 (b2,_) -> ArraySegment.Bounds.diff b1 b2) bound bound_list
+      ArraySegment.Bounds.diff bound (List.fold_left (fun b1 (b2,_) -> ArraySegment.Bounds.diff b1 b2) bound bound_list)
 
     let bound_is_subset b1 b2 = 
       ArraySegment.Bounds.subset b1 b2
@@ -420,9 +519,9 @@ module Domain = struct
       let debug s s1 s2 = 
         Debug.debug ~channel:"segment unification" s;
        
-      List.iter (fun (b,_) -> Debug.debug ~channel:"segunif" "b1: %a" (Print.format Bounds.print) b) s1.bounds;
+      List.iter (fun (b,_) -> Debug.debug ~channel:"segunif" "b1: %a" Bounds.fprint b) s1.bounds;
       List.iter (fun b -> Debug.debug ~channel:"segunif" "e1: %a" (Print.format Element.print) b) s1.segments;
-      List.iter (fun (b,_) -> Debug.debug ~channel:"segunif" "b2: %a" (Print.format Bounds.print) b) s2.bounds;
+      List.iter (fun (b,_) -> Debug.debug ~channel:"segunif" "b2: %a" Bounds.fprint b) s2.bounds;
       List.iter (fun b -> Debug.debug ~channel:"segunif" "e2: %a" (Print.format Element.print) b) s2.segments;
       
       in
@@ -471,7 +570,7 @@ module Domain = struct
       (*    and B ∩ B1 = B ∩ B2 = ∅*)
       | {bounds = (bub1, pres1)::((b1',pres1') as bounds1')::bq1; segments = s1},
         {bounds = (bub2, pres2)::((b2',pres2') as bounds2')::bq2; segments = s2}
-        when let (b1,b,b2) = separate bub1 bub2 in not @@ Bounds.is_bottom b
+        when let (b1,b,b2) = separate bub1 bub2 in not @@ Bounds.is_empty b
         -> (
           debug "cas 4" seg1 seg2;
           let (b1,b,b2) = separate bub1 bub2 in
@@ -551,7 +650,7 @@ module Domain = struct
               let ee = (mk_var e range)  in             
               let evunion = (mk_var vunion range) in
               let expr = mk_binop ~etyp:T_int evunion O_convex_join ee range in
-              man.exec (mk_assign (mk_var vunion range) expr range) flow)
+              man.exec (mk_assign evunion expr range) flow)
               |> post_to_flow man
             ) e flow  
             in
@@ -583,14 +682,19 @@ module Domain = struct
     let subset man ctx (a1,s) (a2,s') =
       let (s,s') = do_op man ctx ArraySegment.Element.bottom ArraySegment.Element.top (a1,s) (a2,s') in
       Debug.debug ~channel:name "subset %a %a" (Print.format Arrays.print) a1 (Print.format Arrays.print) a2;
-      (true (* Arrays.subset a1 a2 *), s, s')
+      ( Arrays.fold2zo (fun _ _ _ -> false) (fun _ _ out -> out) (fun _ a1 a2 out -> 
+        if out then ArraySegment.subset a1 a2
+        else out
+      ) a1 a2 true, s, s')
 
     let join man ctx (a1,s) (a2,s') =
       let (s,s') = do_op man ctx ArraySegment.Element.bottom ArraySegment.Element.bottom (a1,s) (a2,s') in
+      Debug.debug ~channel:name "join %a %a" (Print.format Arrays.print) a1 (Print.format Arrays.print) a2;
       (Arrays.join a1 a2, s , s')
 
     let meet man ctx (a1,s) (a2,s') =
       let (s,s') = do_op man ctx (todo __LOC__) (todo __LOC__) (a1,s) (a2,s') in
+      Debug.debug ~channel:name "meet %a %a" (Print.format Arrays.print) a1 (Print.format Arrays.print) a2;
       (Arrays.meet a1 a2, s, s')
 
     let widen man ctx (a1,s) (a2,s') =
