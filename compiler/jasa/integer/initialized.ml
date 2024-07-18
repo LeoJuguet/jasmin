@@ -140,6 +140,41 @@ let () =
          f);
     }
 
+
+type constant +=
+    C_init
+
+let () =
+  register_constant {
+    compare = (fun cmp a1 a2 ->
+      match a1, a1 with
+      | C_init, C_init -> 0
+      | _ -> cmp a1 a2 
+    );
+    print = (fun next fmt a ->
+      match a with
+      | C_init -> Format.fprintf fmt "INIT"
+      | _ -> next fmt a
+    )
+  }
+
+type typ +=
+  T_INIT
+
+let () =
+    register_typ {
+      compare = (fun cmp a1 a2 -> 
+        match a1,a2 with
+        | T_INIT, T_INIT -> 0
+        | _ -> cmp a1 a2
+      );
+      print = (fun next fmt a ->
+        match a with
+        | T_INIT -> Format.fprintf fmt "init"
+        | _ -> next fmt a
+      )
+    }
+  
 (* Value *)
 module Simplified_Value = struct
   open Init
@@ -194,7 +229,7 @@ let () =
       | CHK_J_SCALAR_INIT -> Format.fprintf fmt "Jasmin Scalar Initialization"
       | _ -> next fmt chk)
 
-type alarm_kind += A_J_Not_Init of expr
+type alarm_kind += A_J_Not_Init of expr * Init.t
 
 let () =
   register_alarm
@@ -206,12 +241,20 @@ let () =
       compare =
         (fun next a1 a2 ->
           match (a1, a2) with
-          | A_J_Not_Init a1, A_J_Not_Init a2 -> compare_expr a1 a2
+          | A_J_Not_Init (a1,i1), A_J_Not_Init (a2,i2) -> 
+            Compare.compose [
+              (fun () -> compare_expr a1 a2);
+              (fun () -> Init.compare i1 i2)
+            ]
           | _ -> next a1 a2);
       print =
         (fun next fmt -> function
-          | A_J_Not_Init e ->
+          | A_J_Not_Init (e,Nb Init.MAYBE) ->
               Format.fprintf fmt "'%a' may not be initialized" pp_expr e
+          | A_J_Not_Init (e,Nb Init.NOT_INIT) ->
+              Format.fprintf fmt "'%a' is not initialized" pp_expr e
+          | A_J_Not_Init (e, _) ->
+              Format.fprintf fmt "'%a' problem with initialisation" pp_expr e
           | c -> next fmt c);
       join = (fun a -> a);
     }
@@ -227,7 +270,7 @@ module Domain = struct
 
   let init prog man flow = flow
 
-  let check_is_init expr e (man : ('a, unit) man) flow =
+  let check_is_init expr e ?(is_warning=false) (man : ('a, unit) man) flow =
     let aval = mk_avalue_query e V_jasmin_scalar_initialized in
     let (is_init : Init.t) = ask_and_reduce man.ask aval flow in
     let range = erange expr in
@@ -238,15 +281,15 @@ module Domain = struct
       Debug.debug ~channel:name "%a is not initialized" pp_expr expr;
       let call_stack = Flow.get_callstack flow in
       let origin = expr in
-      let is_warning = match is_init with Nb NOT_INIT -> false | _ -> true in
-      let alarm = mk_alarm (A_J_Not_Init origin) call_stack range in
+      Debug.debug ~channel:name "is warning : %b" is_warning;
+      let alarm = mk_alarm (A_J_Not_Init (origin, is_init)) call_stack range in
       Flow.raise_alarm alarm ~bottom:false ~warning:is_warning man.lattice flow)
 
   let exec stmt (man : ('a, unit) man) flow =
     match skind stmt with
     | S_assign (lval, expr) when is_jasmin_scalar (etyp expr) ->
         man.eval expr ~translate:"Universal" flow >>$? fun e flow ->
-        check_is_init expr e man flow
+        check_is_init expr e ~is_warning:true man flow
         |> man.exec stmt ~route:(Below name)
         |> OptionExt.return
     | S_J_return vars ->
@@ -258,10 +301,12 @@ module Domain = struct
         >>$? fun args flow ->
         List.fold_left
           (fun flow v ->
-            if is_jasmin_scalar @@ etyp v then check_is_init v v man flow
+            if is_jasmin_scalar @@ etyp v then check_is_init v v ~is_warning:false man flow
             else flow)
           flow args
         |> Post.return |> OptionExt.return
+    | S_J_call(lval, fname, args) -> 
+        None
     | _ -> None
 
   let eval expr man flow = None
