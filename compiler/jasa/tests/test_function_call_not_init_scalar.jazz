@@ -1,0 +1,25 @@
+
+
+fn linear(reg u64 a, reg u64 b, reg u64 c) -> reg u64 {
+	reg u64 d;
+	
+	d = a * b + c;
+
+	return d;
+}
+
+
+
+fn main() -> reg u64 {
+	reg u64 a;
+	reg u64 b;
+	reg u64 c;
+	reg u64 d;
+
+	b = 5;
+
+	d = linear(a,b,c);
+
+	return d;
+
+}
