@@ -1,0 +1,164 @@
+inline fn ef_bitslice_m_vec(reg ptr u8[73] in, reg ptr u32[12] out)->reg ptr u32[12]{
+
+
+reg ptr u32[3] out0 out1 out2 out3; //u32[legs] = 3
+
+// legs = 3
+out0 = out[0 : 3];
+out1 = out[3 : 3];
+out2 = out[6 : 3];
+out3 = out[9 : 3];
+
+stack u32[4] in32;
+
+inline int leg i;
+reg u32 tmp tmp1;
+
+for leg = 0 to 3{
+    for i = 0 to 4{
+         tmp = (32u)in[32*leg + i*8 + 0];
+         tmp = tmp <<  0;
+
+         tmp1 = (32u)in[32*leg + i*8 + 1];
+         tmp1 = tmp1 <<  4;
+
+         tmp = tmp ^ tmp1;
+
+         tmp1 = (32u)in[32*leg + i*8 + 2];
+         tmp1 = tmp1 <<  8;
+
+         tmp = tmp ^ tmp1;
+
+         tmp1 = (32u)in[32*leg + i*8 + 3];
+         tmp1 = tmp1 <<  12;
+
+         tmp = tmp ^ tmp1;
+
+         tmp1 = (32u)in[32*leg + i*8 + 4];
+         tmp1 = tmp1 <<  16;
+
+         tmp = tmp ^ tmp1;
+
+         tmp1 = (32u)in[32*leg + i*8 + 5];
+         tmp1 = tmp1 <<  20;
+
+         tmp = tmp ^ tmp1;
+
+         tmp1 = (32u)in[32*leg + i*8 + 6];
+         tmp1 = tmp1 <<  24;
+
+         tmp = tmp ^ tmp1;
+
+         tmp1 = (32u)in[32*leg + i*8 + 7];
+         tmp1 = tmp1 <<  28;
+
+         tmp = tmp ^ tmp1;
+         in32[i] =  tmp;
+    }
+
+    tmp1  = in32[0];
+    tmp1 = tmp1 & 0x11111111;
+    tmp1 = tmp1  >> 0;
+
+    tmp = in32[1];
+    tmp = tmp & 0x11111111;
+    tmp = tmp << 1;
+
+    tmp = tmp ^ tmp1;
+
+    tmp1 = in32[2];
+    tmp1 = tmp1 & 0x11111111;
+    tmp1 = tmp1 << 2;
+
+    tmp = tmp ^ tmp1;
+
+    tmp1 = in32[3];
+    tmp1 = tmp1 & 0x11111111;
+    tmp1 = tmp1 << 3;
+
+    tmp = tmp ^ tmp1;
+
+    out0[leg] =   tmp;
+
+    tmp1  = in32[0];
+    tmp1 = tmp1 & 0x22222222;
+    tmp1 = tmp1  >> 1;
+
+    tmp = in32[1];
+    tmp = tmp & 0x22222222;
+    tmp = tmp >> 0;
+
+    tmp = tmp ^ tmp1;
+
+    tmp1 = in32[2];
+    tmp1 = tmp1 & 0x22222222;
+    tmp1 = tmp1 << 1;
+
+    tmp = tmp ^ tmp1;
+
+    tmp1 = in32[3];
+    tmp1 = tmp1 & 0x22222222;
+    tmp1 = tmp1 << 2;
+
+    tmp = tmp ^ tmp1;
+
+    out1[leg] =   tmp;
+
+    tmp1  = in32[0];
+    tmp1 = tmp1 & 0x44444444;
+    tmp1 = tmp1  >> 2;
+
+    tmp = in32[1];
+    tmp = tmp & 0x44444444;
+    tmp = tmp >> 1;
+
+    tmp = tmp ^ tmp1;
+
+    tmp1 = in32[2];
+    tmp1 = tmp1 & 0x44444444;
+    tmp1 = tmp1 >> 0;
+
+    tmp = tmp ^ tmp1;
+
+    tmp1 = in32[3];
+    tmp1 = tmp1 & 0x44444444;
+    tmp1 = tmp1 << 1;
+
+    tmp = tmp ^ tmp1;
+
+    out2[leg] =   tmp;
+
+
+    tmp1  = in32[0];
+    tmp1 = tmp1 & 0x88888888;
+    tmp1 = tmp1  >> 2;
+
+    tmp = in32[1];
+    tmp = tmp & 0x88888888;
+    tmp = tmp >> 2;
+
+    tmp = tmp ^ tmp1;
+
+    tmp1 = in32[2];
+    tmp1 = tmp1 & 0x88888888;
+    tmp1 = tmp1 >> 1;
+
+    tmp = tmp ^ tmp1;
+
+    tmp1 = in32[3];
+    tmp1 = tmp1 & 0x88888888;
+    tmp1 = tmp1 >> 0;
+
+    tmp = tmp ^ tmp1;
+
+    out3[leg] =   tmp;
+   }
+
+    out[0 : 3] = out0 ;
+    out[3 : 3] = out1 ;
+    out[6 : 3] = out2 ;
+    out[9 : 3] = out3 ;
+
+    return out;
+}
+

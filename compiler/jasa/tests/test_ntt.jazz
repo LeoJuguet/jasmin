@@ -117,8 +117,8 @@ param int DMONT   = 1353;      /* (1ULL << 32) % KYBER_Q */
 
 
 
-fn _poly_ntt(reg ptr u16[KYBER_N] rp) -> reg ptr u16[KYBER_N]
-requires {init_array(0,0,KYBER_N)}
+fn _poly_ntt(reg ptr u16[KYBER_N] rp, reg ptr u16[128] zetasp) -> reg ptr u16[KYBER_N]
+requires {init_array(0,0,KYBER_N) && init_array(1,0,128*16)}
 ensures {assigns_array(0,0,KYBER_N)}
 {
   reg u64 len;  
@@ -132,10 +132,10 @@ ensures {assigns_array(0,0,KYBER_N)}
   reg u16 s;
   reg u16 m;
 
-  reg ptr u16[128] zetasp;
+  //reg ptr u16[128] zetasp;
   reg u64 zetasctr;
 
-  zetasp = jzetas;
+  //zetasp = jzetas;
   zetasctr = 0;
   len = 128;
   while (len >= 2)

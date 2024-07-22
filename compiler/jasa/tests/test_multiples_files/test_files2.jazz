@@ -1,0 +1,16 @@
+require "test_files1.jazz"
+
+
+fn f() -> reg u64 {
+	
+	reg u64 a;
+	reg u64 b;
+	reg u64 c;
+
+	a = 5;
+	b = 4;
+	c = add(a,b);
+
+	return c;
+
+}

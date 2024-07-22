@@ -1,0 +1,99 @@
+/* safety annotations */
+
+abstract predicate bool init_array(int,int,int); /* #parameter, offset, len */
+abstract predicate bool init_memory(u64,int,int); /* ptr, offset, len */
+abstract predicate bool valid_memory(u64,int,int); /* ptr, offset, len */
+abstract predicate bool assigns_array(int,int,int); /* #result, offset, len */
+abstract predicate bool assigns_memory(u64,int,int); /* ptr, offset, len */
+
+/* require "params.jinc" */
+
+param int KYBER_Q = 3329;
+param int KYBER_N = 256;
+param int KYBER_K = 3;
+param int KYBER_VECN =  KYBER_K * KYBER_N;
+
+param int KYBER_SYMBYTES = 32;
+param int KYBER_ETA = 2;
+param int KYBER_POLYBYTES = 384;
+param int KYBER_POLYVECBYTES = (KYBER_K * KYBER_POLYBYTES);
+param int KYBER_POLYCOMPRESSEDBYTES = 128;
+param int KYBER_POLYVECCOMPRESSEDBYTES = (KYBER_K * 320);
+param int KYBER_MSGBYTES = KYBER_SYMBYTES;
+param int KYBER_CT_LEN = KYBER_POLYVECCOMPRESSEDBYTES + KYBER_POLYCOMPRESSEDBYTES;
+param int KYBER_INDCPA_PUBLICKEYBYTES = KYBER_POLYVECBYTES + KYBER_SYMBYTES;
+param int KYBER_PUBLICKEYBYTES = KYBER_INDCPA_PUBLICKEYBYTES;
+param int KYBER_SSBYTES = 32;
+
+/* require "reduce.jinc" */
+
+param int QINV    = 62209;     /* q^(-1) mod 2^16 */
+param int MONT    = 2285;      /* 2^16 % Q */
+param int BARR    = 20159;     /* (1U << 26)/KYBER_Q + 1 */
+param int DMONT   = 1353;      /* (1ULL << 32) % KYBER_Q */
+
+
+fn _i_poly_frommsg(reg ptr u16[KYBER_N] rp, reg ptr u8[32] ap) -> stack u16[KYBER_N]
+requires {init_array(1,0,32)}
+ensures {assigns_array(0,0,KYBER_N)}
+{
+  reg u8 c;
+  reg u16 t;
+  inline int i;
+  inline int j;
+
+  for i = 0 to 32
+  {
+    c = ap[i];
+
+    t = (16u)c; 
+    t &= 1;
+    t *= (KYBER_Q+1)/2;
+    rp[8*i] = t;
+    c >>= 1;
+
+    t = (16u)c; 
+    t &= 1;
+    t *= (KYBER_Q+1)/2;
+    rp[8*i+1] = t;
+    c >>= 1;
+
+    t = (16u)c; 
+    t &= 1;
+    t *= (KYBER_Q+1)/2;
+    rp[8*i+2] = t;
+    c >>= 1;
+
+    t = (16u)c; 
+    t &= 1;
+    t *= (KYBER_Q+1)/2;
+    rp[8*i+3] = t;
+    c >>= 1;
+
+    t = (16u)c; 
+    t &= 1;
+    t *= (KYBER_Q+1)/2;
+    rp[8*i+4] = t;
+    c >>= 1;
+
+    t = (16u)c; 
+    t &= 1;
+    t *= (KYBER_Q+1)/2;
+    rp[8*i+5] = t;
+    c >>= 1;
+
+    t = (16u)c; 
+    t &= 1;
+    t *= (KYBER_Q+1)/2;
+    rp[8*i+6] = t;
+    c >>= 1;
+
+    t = (16u)c; 
+    t &= 1;
+    t *= (KYBER_Q+1)/2;
+    rp[8*i+7] = t;
+    c >>= 1;
+  }
+  return rp;
+}
+

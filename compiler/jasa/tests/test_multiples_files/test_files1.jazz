@@ -1,0 +1,7 @@
+fn add(reg u64 a, reg u64 b) -> reg u64 {
+	reg u64 c;
+	
+	c = a + b;
+
+	return c;
+}
