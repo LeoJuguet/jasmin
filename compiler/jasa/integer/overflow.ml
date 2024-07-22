@@ -190,7 +190,7 @@ module Domain = struct
         assume cond
           ~fthen:(fun tflow ->
             let flow =
-              Flow.add_safe_check CHK_J_DIVIDE_BY_ZERO (erange expr) flow
+              Flow.add_safe_check CHK_J_DIVIDE_BY_ZERO (erange expr) tflow
             in
             Debug.debug ~channel:"Overflow" "Binop test";
             let jexp = rebuild_jazz_expr expr [ e1; e2 ] in

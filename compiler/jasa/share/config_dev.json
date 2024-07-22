@@ -17,8 +17,8 @@
 
 					,"jasmin.translator"
 					,"jasmin.integer.overflow"
-					//"jasmin.integer.division_by_zero"
 //					,"jasmin.memory.array_init"
+					,"jasmin.array.segments"
 					,"jasmin.array.init"
 					,"jasmin.memory.array"
 

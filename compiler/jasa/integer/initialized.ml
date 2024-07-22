@@ -142,18 +142,18 @@ let () =
 
 
 type constant +=
-    C_init
+    C_init of Init.init_t
 
 let () =
   register_constant {
     compare = (fun cmp a1 a2 ->
       match a1, a1 with
-      | C_init, C_init -> 0
+      | C_init i1, C_init i2 -> Init.compare (Nb i1) (Nb i2)
       | _ -> cmp a1 a2 
     );
     print = (fun next fmt a ->
       match a with
-      | C_init -> Format.fprintf fmt "INIT"
+      | C_init i1 -> Format.fprintf fmt "INIT %a" Init.pp_init (Nb i1)
       | _ -> next fmt a
     )
   }
@@ -174,6 +174,9 @@ let () =
         | _ -> next fmt a
       )
     }
+
+
+
   
 (* Value *)
 module Simplified_Value = struct
@@ -200,6 +203,7 @@ module Simplified_Value = struct
   let constant c t =
     match c with
     | C_int _ | C_bool _ | C_int_interval _ -> Nb INIT
+    | C_init t -> Nb t
     | C_top _ ->
         Nb NOT_INIT (* default value of variables (when S_add is executed) *)
     | _ -> Nb NOT_INIT

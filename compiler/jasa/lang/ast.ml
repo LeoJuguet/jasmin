@@ -497,12 +497,22 @@ let rec jasmin_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ]) ?(
           ]
         )
       ) range
-    | pred_name,_ -> panic ~loc:__LOC__ "abstract %s is not yet supported" pred_name
+    | pred_name,_ -> 
+      warn_at range "abstract %s is not yet supported" pred_name;
+      mk_true range
       )
-  | Pfvar _ -> failwith "expr Pfvar not yet supported"
-  | Pbig _ -> failwith "expr Pbig not yet supported"
-  | Presult _ -> failwith "expr Presult not yet supported"
-  | Presultget _ -> failwith "expr Presultget not yet supported"
+  | Pfvar _ -> 
+    warn_at range "expr Pfvar not yet supported";
+    mk_true range
+  | Pbig _ -> 
+    warn_at range "expr Pbig not yet supported";
+    mk_true range
+  | Presult _ -> 
+    warn_at range "expr Presult not yet supported";
+    mk_true range
+  | Presultget _ -> 
+    warn_at range "expr Presultget not yet supported";
+    mk_true range
   | _ -> failwith "expr not yet supported"
 
 
@@ -785,6 +795,7 @@ let get_locals_var prog =
     | S_J_while(s1,cond,body) -> locals_stmt body @@ locals_expr cond @@ locals_stmt s1 vars
     | S_J_if(c,strue,sfalse) -> locals_stmt sfalse (locals_stmt strue (locals_expr c vars))
     | S_if (c,strue,sfalse) -> locals_stmt sfalse (locals_stmt strue (locals_expr c vars))
+    | S_J_call(lval,_,args) -> List.fold_right locals_expr lval (List.fold_right locals_expr args vars)
     | S_J_return return_var -> List.fold_right VarSet.add return_var vars
     | _ -> vars
   and locals_expr expr vars =
