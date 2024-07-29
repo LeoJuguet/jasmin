@@ -121,6 +121,11 @@ let is_left_value = function
   | E_J_Lvar _ | E_J_Laset _ | E_J_Lnone _ | E_J_Lmem _ | E_J_Lasub _ -> true
   | _ -> false
 
+let pp_array_access fmt = function
+  | Warray_.AAdirect -> fprintf fmt "AAdirect"
+  | Warray_.AAscale -> fprintf fmt "AAscale"
+
+
 let () =
   register_expr_with_visitor
     {
@@ -133,7 +138,7 @@ let () =
           | E_J_get (arr_access, wsize, var, expr) ->
               fprintf fmt "@[get(%a, %a)@]" pp_var var pp_expr expr
           | E_J_sub (arr_access, wsize, len, var, expr) ->
-              fprintf fmt "@[sub(%s, %s, %d, %a,%a)@]" (match arr_access with Warray_.AAdirect -> "AAdirect" | _ -> "AAscale") (string_of_wsize wsize) len pp_var var pp_expr expr
+              fprintf fmt "@[sub(%a, %s, %d, %a,%a)@]" pp_array_access arr_access (string_of_wsize wsize) len pp_var var pp_expr expr
           | E_J_load (wsize, var, expr) ->
               fprintf fmt "@[load(%a, %a)@]" pp_var var pp_expr expr
           | E_J_if (typ, cond, expr1, expr2) ->
@@ -152,9 +157,9 @@ let () =
           | E_J_Lmem (wsize, var, expr) ->
               fprintf fmt "Lmem(%a,%a)" pp_var var pp_expr expr
           | E_J_Laset (arr_access, wsize, var, expr) ->
-              fprintf fmt "Laset(%s, %s,%a,%a)" (match arr_access with Warray_.AAdirect -> "AAdirect" | _ -> "AAscale") (string_of_wsize wsize) pp_var var pp_expr expr
+              fprintf fmt "Laset(%a, %s,%a,%a)" pp_array_access arr_access (string_of_wsize wsize) pp_var var pp_expr expr
           | E_J_Lasub (arr_access, wsize, len, var, expr) ->
-              fprintf fmt "Lasub(%s, %s, %d,%a,%a)" (match arr_access with Warray_.AAdirect -> "AAdirect" | _ -> "AAscale") (string_of_wsize wsize) len pp_var var pp_expr expr
+              fprintf fmt "Lasub(%a, %s, %d,%a,%a)" pp_array_access arr_access (string_of_wsize wsize) len pp_var var pp_expr expr
           | E_J_return_vars vars ->
               fprintf fmt "ret_vars(%a)" (Jasmin.Utils.pp_list ", " pp_var) vars
           | E_stub_J_abstract (builtin, exprs) ->
@@ -342,20 +347,12 @@ let jasmin_to_mopsa_type typ =
   | Arr (wsize, len) -> T_J_Array (wsize, len)
   | _ -> panic ~loc:__LOC__ "type is not supported"
 
-let jasmin_mopsa_to_universal typ =
-  let open Universal.Ast in
-  match typ with
-  | T_J_U wsize -> T_J_U wsize
-  | T_J_Array (wsize, len) -> T_array T_int
-  | _ -> typ
 
 let jasmin_to_mopsa_var var =
   let open CoreIdent in
   let open Prog in
   mkv (var.v_name^":"^string_of_uid var.v_id)
-    (* FIXME add vkind type*)
     (V_uniq (var.v_name, hash_of_uid var.v_id))
-    (* FIXME *)
     (jasmin_to_mopsa_type var.v_ty)
 
 let jasmin_to_mopsa_op_kind =
@@ -419,6 +416,7 @@ let jasmin_to_mopsa_op2 op =
   | Ovlsl (velem, wsize) -> failwith "todo trad op with velem wsize"
   | Ovasr (velem, wsize) -> failwith "todo trad op with velem wsize"
 
+(* Translate pos of variable in arguments/return to the variable *)
 let sub_pos_to_var expr vars =
   let open Prog in
   match expr with
@@ -537,7 +535,7 @@ and jasmin_lval_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ]) ?
   let open Prog in
   match lval with
   | Lnone (loc, typ) -> mk_expr (E_J_Lnone (jasmin_to_mopsa_type typ)) range
-  | Lvar var -> (* mk_expr (E_J_Lvar (jasmin_to_mopsa_var var.pl_desc)) range *)
+  | Lvar var -> 
     mk_var (jasmin_to_mopsa_var var.pl_desc) range
   | Lmem (_, wsize, var, expr) ->
       mk_expr
@@ -628,6 +626,7 @@ let rec jasmin_to_mopsa_stmt ?(translate_info = {args = []; return_var = []}) in
 
 (* TODO translate fields commented *)
 
+(** Similar to the jasmin gfunc type but with MOPSA types *)
 type j_func = {
   f_loc : range;
   (* f_annot *)
@@ -642,11 +641,10 @@ type j_func = {
   (* f_outannot *)
   f_ret : var list;
 }
-(** Similar to the jasmin gfunc type but with MOPSA types *)
 
 let declare_args ?(range = mk_program_range ["dummy range"]) args =
   let open Universal.Ast in
-  if List.compare_length_with args 0 = 0 then mk_nop range
+  if args = [] then mk_nop range
   else mk_block (List.map (fun v -> mk_stmt (S_J_declare v) range) args) range
 
 
@@ -849,8 +847,8 @@ let is_jasmin_numeric_type typ = match typ with
 
 let get_array_type_len typ = match typ with
   | T_J_Array (_, len) -> len
-  | _ -> panic ~loc:__FILE__ "%a is not a T_J_Array type" pp_typ typ
+  | _ -> panic ~loc:__FILE__ "%a is not of type T_J_Array type" pp_typ typ
 
 let get_array_type_wsize typ = match typ with
   | T_J_Array (wsize, len) -> wsize
-  | _ -> panic ~loc:__FILE__ "%a is not a T_J_Array type" pp_typ typ
+  | _ -> panic ~loc:__FILE__ "%a is not of type T_J_Array" pp_typ typ
