@@ -22,7 +22,6 @@ module Init = struct
   let init = Nb INIT
   let maybe = Nb MAYBE
   let not_init = Nb NOT_INIT
-
   let print fmt t = unformat pp_init ~path:[ Key "init" ] fmt t
   let top = Nb NOT_INIT
   let bottom = BOT
@@ -74,8 +73,7 @@ end
 
 type _ avalue_kind += V_jasmin_scalar_initialized : Init.t avalue_kind
 
-let mk_scalar_is_init_query e =
-  mk_avalue_query e V_jasmin_scalar_initialized
+let mk_scalar_is_init_query e = mk_avalue_query e V_jasmin_scalar_initialized
 
 let () =
   register_avalue
@@ -140,44 +138,36 @@ let () =
          f);
     }
 
-
-type constant +=
-    C_init of Init.init_t
+type constant += C_init of Init.init_t
 
 let () =
-  register_constant {
-    compare = (fun cmp a1 a2 ->
-      match a1, a1 with
-      | C_init i1, C_init i2 -> Init.compare (Nb i1) (Nb i2)
-      | _ -> cmp a1 a2 
-    );
-    print = (fun next fmt a ->
-      match a with
-      | C_init i1 -> Format.fprintf fmt "INIT %a" Init.pp_init (Nb i1)
-      | _ -> next fmt a
-    )
-  }
-
-type typ +=
-  T_INIT
-
-let () =
-    register_typ {
-      compare = (fun cmp a1 a2 -> 
-        match a1,a2 with
-        | T_INIT, T_INIT -> 0
-        | _ -> cmp a1 a2
-      );
-      print = (fun next fmt a ->
-        match a with
-        | T_INIT -> Format.fprintf fmt "init"
-        | _ -> next fmt a
-      )
+  register_constant
+    {
+      compare =
+        (fun cmp a1 a2 ->
+          match (a1, a1) with
+          | C_init i1, C_init i2 -> Init.compare (Nb i1) (Nb i2)
+          | _ -> cmp a1 a2);
+      print =
+        (fun next fmt a ->
+          match a with
+          | C_init i1 -> Format.fprintf fmt "INIT %a" Init.pp_init (Nb i1)
+          | _ -> next fmt a);
     }
 
+type typ += T_INIT
 
+let () =
+  register_typ
+    {
+      compare =
+        (fun cmp a1 a2 ->
+          match (a1, a2) with T_INIT, T_INIT -> 0 | _ -> cmp a1 a2);
+      print =
+        (fun next fmt a ->
+          match a with T_INIT -> Format.fprintf fmt "init" | _ -> next fmt a);
+    }
 
-  
 (* Value *)
 module Simplified_Value = struct
   open Init
@@ -245,17 +235,17 @@ let () =
       compare =
         (fun next a1 a2 ->
           match (a1, a2) with
-          | A_J_Not_Init (a1,i1), A_J_Not_Init (a2,i2) -> 
-            Compare.compose [
-              (fun () -> compare_expr a1 a2);
-              (fun () -> Init.compare i1 i2)
-            ]
+          | A_J_Not_Init (a1, i1), A_J_Not_Init (a2, i2) ->
+              Compare.compose
+                [
+                  (fun () -> compare_expr a1 a2); (fun () -> Init.compare i1 i2);
+                ]
           | _ -> next a1 a2);
       print =
         (fun next fmt -> function
-          | A_J_Not_Init (e,Nb Init.MAYBE) ->
+          | A_J_Not_Init (e, Nb Init.MAYBE) ->
               Format.fprintf fmt "'%a' may not be initialized" pp_expr e
-          | A_J_Not_Init (e,Nb Init.NOT_INIT) ->
+          | A_J_Not_Init (e, Nb Init.NOT_INIT) ->
               Format.fprintf fmt "'%a' is not initialized" pp_expr e
           | A_J_Not_Init (e, _) ->
               Format.fprintf fmt "'%a' problem with initialisation" pp_expr e
@@ -274,7 +264,7 @@ module Domain = struct
 
   let init prog man flow = flow
 
-  let check_is_init expr e ?(is_warning=false) (man : ('a, unit) man) flow =
+  let check_is_init expr e ?(is_warning = false) (man : ('a, unit) man) flow =
     let aval = mk_avalue_query e V_jasmin_scalar_initialized in
     let (is_init : Init.t) = ask_and_reduce man.ask aval flow in
     let range = erange expr in
@@ -305,12 +295,12 @@ module Domain = struct
         >>$? fun args flow ->
         List.fold_left
           (fun flow v ->
-            if is_jasmin_scalar @@ etyp v then check_is_init v v ~is_warning:false man flow
+            if is_jasmin_scalar @@ etyp v then
+              check_is_init v v ~is_warning:false man flow
             else flow)
           flow args
         |> Post.return |> OptionExt.return
-    | S_J_call(lval, fname, args) -> 
-        None
+    | S_J_call (lval, fname, args) -> None
     | _ -> None
 
   let eval expr man flow = None
