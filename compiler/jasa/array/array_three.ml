@@ -5,7 +5,6 @@ open Universal.Ast
 open Ast
 open Array_common
 
-
 let todo loc = panic ~loc "Oups todo"
 
 module Present = struct
@@ -311,8 +310,7 @@ module ArraySegment = struct
                         assume
                           (mk_eq (mk_var b2 range) (mk_var bounds range) range)
                           ~fthen:(fun flow ->
-                            todo __LOC__ (* raise warning over bounds*)
-                          )
+                            todo __LOC__ (* raise warning over bounds*))
                           ~felse:(fun flow ->
                             man.exec
                               (mk_assign (mk_var b2 range) index_up range)
@@ -347,14 +345,26 @@ module ArraySegment = struct
                           flow)
                       ~felse:(fun flow ->
                         (* i + len > b2*)
-                            man.exec (mk_assign (mk_var b2 range) index_up range) flow 
-                            >>% man.exec (mk_assign (mk_var s2 range) (mk_convex_join (mk_var s2 range) value range) range)
-                        )
-                      ~fboth:(fun _ _ -> 
-                            man.exec (mk_assign (mk_var b2 range) index_up range) flow 
-                            >>% man.exec (mk_assign (mk_var s2 range) (mk_convex_join (mk_var s2 range) value range) range)
-                            >>% man.exec (mk_assign (mk_var s2 range) (mk_convex_join (mk_var s2 range) (mk_var s3 range) range) range)
-                      )
+                        man.exec
+                          (mk_assign (mk_var b2 range) index_up range)
+                          flow
+                        >>% man.exec
+                              (mk_assign (mk_var s2 range)
+                                 (mk_convex_join (mk_var s2 range) value range)
+                                 range))
+                      ~fboth:(fun _ _ ->
+                        man.exec
+                          (mk_assign (mk_var b2 range) index_up range)
+                          flow
+                        >>% man.exec
+                              (mk_assign (mk_var s2 range)
+                                 (mk_convex_join (mk_var s2 range) value range)
+                                 range)
+                        >>% man.exec
+                              (mk_assign (mk_var s2 range)
+                                 (mk_convex_join (mk_var s2 range)
+                                    (mk_var s3 range) range)
+                                 range))
                       man flow)
                   man flow)
               ~felse:(fun flow ->
@@ -367,18 +377,25 @@ module ArraySegment = struct
                       (mk_assign (mk_var s1 range)
                          (mk_convex_join (mk_var s1 range) value range)
                          range)
-                      flow
-                    )
+                      flow)
                   ~felse:(fun flow ->
                     (* i + len > b1 *)
                     man.exec (mk_assign (mk_var b1 range) index_up range) flow
-                    >>% man.exec (mk_assign (mk_var s1 range) (mk_convex_join (mk_var s1 range) value range) range)
-                  )
-                  ~fboth:(fun _ _ -> 
+                    >>% man.exec
+                          (mk_assign (mk_var s1 range)
+                             (mk_convex_join (mk_var s1 range) value range)
+                             range))
+                  ~fboth:(fun _ _ ->
                     man.exec (mk_assign (mk_var b1 range) index_up range) flow
-                    >>% man.exec (mk_assign (mk_var s1 range) (mk_convex_join (mk_var s1 range) value range) range)
-                    >>% man.exec (mk_assign (mk_var s1 range) (mk_convex_join (mk_var s1 range) (mk_var s2 range) range) range)
-                  )
+                    >>% man.exec
+                          (mk_assign (mk_var s1 range)
+                             (mk_convex_join (mk_var s1 range) value range)
+                             range)
+                    >>% man.exec
+                          (mk_assign (mk_var s1 range)
+                             (mk_convex_join (mk_var s1 range) (mk_var s2 range)
+                                range)
+                             range))
                   man flow)
               ~fboth:(fun _ _ -> todo __LOC__)
               man flow)
@@ -422,18 +439,10 @@ module ArraySegment = struct
     man.eval out flow
 
   let is_bottom _ = false
-
-  let subset e1 e2 =
-    true
-
-  let join e1 e2 =
-    todo __LOC__
-
-  let meet e1 e2 =
-    todo __LOC__
-
-  let widen ctx e1 e2 =
-    todo __LOC__
+  let subset e1 e2 = true
+  let join e1 e2 = todo __LOC__
+  let meet e1 e2 = todo __LOC__
+  let widen ctx e1 e2 = todo __LOC__
 
   let merge pre (a, e) (a', e') =
     panic ~loc:__LOC__ "Merge is impossible with ArraySegment"
@@ -511,12 +520,11 @@ module Domain = struct
       a2 r;
     (r, s, s')
 
-  let join man ctx ((a1, s): Arrays.t * 'a) ((a2, s'): Arrays.t * 'b) =
+  let join man ctx ((a1, s) : Arrays.t * 'a) ((a2, s') : Arrays.t * 'b) =
     match (a1, a2) with
     | BOT, a2 -> (a2, s, s')
     | a1, BOT -> (a1, s, s')
-    | a1, a2 ->
-       (a2, s, s')
+    | a1, a2 -> (a2, s, s')
 
   let meet man ctx (a1, s) (a2, s') =
     (* let (s,s') = do_op man ctx (todo __LOC__) (todo __LOC__) (a1,s) (a2,s') in *)
@@ -525,7 +533,7 @@ module Domain = struct
     todo __LOC__
 
   let widen man ctx (a1, s) (a2, s') =
-   let a1, a2, a3 = join man ctx (a1, s) (a1, s') in
+    let a1, a2, a3 = join man ctx (a1, s) (a1, s') in
     (a1, a2, a3, true)
 
   let merge _ _ =
@@ -592,8 +600,7 @@ module Domain = struct
         ArraySegment.set arr arr_abs pos ~len
           (mk_constant ~etyp:T_int Integer.Initialized.(C_init Init.INIT) range)
           ~range man flow
-        >>%? fun flow ->
-        flow |> Post.return |> OptionExt.return
+        >>%? fun flow -> flow |> Post.return |> OptionExt.return
     | _ -> None
 
   let eval expr man flow =
@@ -604,16 +611,16 @@ module Domain = struct
           Cases.empty flow |> OptionExt.return
         else
           let arr = Arrays.find var (get_env T_cur man flow) in
-         ArraySegment.get arr index ~range man flow |> OptionExt.return
+          ArraySegment.get arr index ~range man flow |> OptionExt.return
     | E_stub_J_abstract (Init_array, [ { ekind = E_var (arr, _) }; pos; len ])
       ->
-       let range = erange expr in
+        let range = erange expr in
         let arr_abs = Arrays.find arr (get_env T_cur man flow) in
         ArraySegment.set arr arr_abs pos ~len
           (mk_constant ~etyp:T_int Integer.Initialized.(C_init Init.INIT) range)
           ~range man flow
         >>%? fun flow ->
-       flow |> Cases.return (mk_true range) |> OptionExt.return
+        flow |> Cases.return (mk_true range) |> OptionExt.return
     | _ -> None
 
   (** { Communication handlers } *)
