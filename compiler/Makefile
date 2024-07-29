@@ -40,7 +40,7 @@ all:
 
 jasa:
 	$(RM) jasa.exe
-	dune build jasa
+	dune build @check jasa
 	ln -sf "_build/default/jasa/jasa.exe" jasa.exe
 
 CIL:
