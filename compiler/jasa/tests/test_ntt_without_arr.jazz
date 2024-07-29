@@ -88,27 +88,6 @@ u16[128] jzetas_inv = {1701, 1807, 1460, 2371, 2338, 2333, 308, 108, 2851, 870, 
 
 
 
-inline
-fn __poly_reduce(reg ptr u16[KYBER_N] rp) -> reg ptr u16[KYBER_N]
-requires {init_array(0,0,KYBER_N)}
-ensures {assigns_array(0,0,KYBER_N)}
-{
-  reg u64 j; 
-  reg u16 t;
-  j = 0;
-  while (j < KYBER_N) 
-  {
-    t = rp[(int)j];
-    t = __barrett_reduce(t);
-    rp[(int)j] = t;
-    j += 1;
-  }
-  return rp;
-}
-
-
-
-
 
 param int DMONT   = 1353;      /* (1ULL << 32) % KYBER_Q */
 
@@ -117,9 +96,7 @@ param int DMONT   = 1353;      /* (1ULL << 32) % KYBER_Q */
 
 
 
-fn _poly_ntt(reg ptr u16[KYBER_N] rp, reg ptr u16[128] zetasp) -> reg ptr u16[KYBER_N]
-requires {init_array(0,0,KYBER_N) && init_array(1,0,128)}
-ensures {assigns_array(0,0,KYBER_N)}
+fn _poly_ntt()
 {
   reg u64 len;  
   reg u64 start;
@@ -144,20 +121,20 @@ ensures {assigns_array(0,0,KYBER_N)}
     while (start < 256)
     {
       zetasctr += 1;
-      zeta = zetasp[(int)zetasctr];
+      zeta = 0; //zeta = zetasp[(int)zetasctr];
       j = start;
       cmp = start + len;
       while (j < cmp)
       {
         offset = j + len;
-        t = rp[(int)offset];
+        t = 0;//t = rp[(int)offset];
         t = __fqmul(t, zeta);
-        s = rp[(int)j];
+        s = 25; //s = rp[(int)j];
         m = s;
         m -= t;
-        rp[(int)offset] = m;
+        //rp[(int)offset] = m;
         t += s;
-        rp[(int)j] = t;
+        //rp[(int)j] = t;
         j += 1;
       }
       start = j + len;
@@ -165,8 +142,6 @@ ensures {assigns_array(0,0,KYBER_N)}
     len >>= 1;
   }
 
-  rp = __poly_reduce(rp);
-
-  return rp;
+  //rp = __poly_reduce(rp);
 }
 
