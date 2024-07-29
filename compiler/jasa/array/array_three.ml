@@ -5,11 +5,6 @@ open Universal.Ast
 open Ast
 open Array_common
 
-(* This is inspired by the paper : *)
-(* Patrick Cousot, Radhia Cousot, and Francesco Logozzo. 2011. A parametric *)
-(* segmentation functor for fully automatic and scalable array content *)
-(* analysis. SIGPLAN Not. 46, 1 (January 2011), 105–118. *)
-(* https://doi.org/10.1145/1925844.1926399 *)
 
 let todo loc = panic ~loc "Oups todo"
 
