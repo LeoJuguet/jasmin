@@ -22,7 +22,7 @@ stdenv.mkDerivation {
     owner = "mopsa";
     repo = "mopsa-analyzer";
     rev = "3f5ca06292ace41c167dd066f214fb4c4184593c";
-    hash = "sha256-u6XciBaEGuc9OdyJNURuep/dZVsRJNd/pzBsUPRk+xo=";
+    hash = "sha256-DDnD9R4uTXPKQ0PStvEuntCLzlKweroTJFmYrb1KAY4=";
   };
 
   postPatch = ''
