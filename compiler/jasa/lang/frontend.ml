@@ -1,8 +1,6 @@
 open Jasmin
 open Ast
 
-
-
 module Arch =
   (val let use_set0 = true and use_lea = true in
        let call_conv = Glob_options.Linux in
@@ -33,12 +31,13 @@ open Ast
 let opt_functions = ref []
 
 let () =
-    register_language_option "Jasmin" {
-        key = "-jazz-strip";
-        category = "Jasmin";
-        doc = " select functions to check";
-        spec = ArgExt.Set_string_list opt_functions;
-        default = "all";
+  register_language_option "Jasmin"
+    {
+      key = "-jazz-strip";
+      category = "Jasmin";
+      doc = " select functions to check";
+      spec = ArgExt.Set_string_list opt_functions;
+      default = "all";
     }
 
 (* ======================================================================  *)
@@ -49,11 +48,12 @@ let () =
 let jasmin_parser files =
   match files with
   | file :: _ ->
-    let prog = load_file file in
-    let prog_slice = match !opt_functions with
-    | [] -> prog
-    | _ -> Jasmin.Slicing.slice !opt_functions prog
-    in
+      let prog = load_file file in
+      let prog_slice =
+        match !opt_functions with
+        | [] -> prog
+        | _ -> Jasmin.Slicing.slice !opt_functions prog
+      in
       {
         prog_kind = Jasmin_Program (mk_jasmin_program prog_slice);
         prog_range = mk_program_range [ file ];
@@ -76,10 +76,8 @@ module EntryDomainJasmin = struct
         Debug.debug ~channel:name "%a" pp_program prog;
         Debug.debug ~channel:name "init jasmin program\n";
         (* really mandatory ? *)
-        set_jasmin_program jprog flow
-        |> set_target_info (module Arch)
+        set_jasmin_program jprog flow |> set_target_info (module Arch)
     | _ -> flow
-
 
   (* Get requires and transform them *)
   let get_requires stub =
@@ -87,25 +85,24 @@ module EntryDomainJasmin = struct
     let rec aux sections acc =
       match sections with
       | [] -> acc
-      | S_leaf (S_requires require_with_range)::q -> (Debug.debug ~channel:name "is a leaf with requires";
-        let require = get_content require_with_range in
-        match get_content require with
-          | F_expr expr -> aux q (mk_assume expr (erange expr)::acc)
-          | _ -> aux q acc
-        )
-      | _ :: q -> Debug.debug ~channel:name "is not a leaf"; aux q acc
+      | S_leaf (S_requires require_with_range) :: q -> (
+          Debug.debug ~channel:name "is a leaf with requires";
+          let require = get_content require_with_range in
+          match get_content require with
+          | F_expr expr -> aux q (mk_assume expr (erange expr) :: acc)
+          | _ -> aux q acc)
+      | _ :: q ->
+          Debug.debug ~channel:name "is not a leaf";
+          aux q acc
     in
 
     aux stub.stub_func_body []
 
-  let get_requires_in_assumes prog=
+  let get_requires_in_assumes prog =
     let stub = prog.f_stub in
     let range = prog.f_loc in
     let requires = get_requires stub in
     requires
-
-
-
 
   let exec stmt man flow =
     match skind stmt with
@@ -126,32 +123,44 @@ module EntryDomainJasmin = struct
         (* List.iter *)
         (*   (fun func -> pp_stmt Format.std_formatter func.f_body) *)
         (*   prog.functions; *)
-      let open Stubs.Ast in
-      Flow.join_list man.lattice
-      ~empty:(fun () -> flow )
-      (
-        List.map (fun prog ->
-            let body = prog.f_body in
-            let locals_vars = VarSet.elements (get_locals_var body) in
-            (* add vars to values domains *)
-            let range = srange body in
-            let f = Flow.add T_cur flow in
-            let add_vars = List.map (fun v ->
-              mk_add (mk_var {v with
-                vtyp = match vtyp v with
-                      | T_J_U _ | T_J_Int -> T_int
-                      | a -> a
-              } range) range) locals_vars in
-            List.iter (fun v -> Debug.debug ~channel:name "type %a : %a" pp_var v pp_typ (vtyp v)) locals_vars;
-            let requires = get_requires_in_assumes prog in
-            let new_block = mk_block (add_vars @ requires @ [body])  range in
-            man.exec new_block flow |> post_to_flow man
-            |> Flow.remove T_cur
-          ) prog.functions
-      )
-    |> Post.return
-    |> OptionExt.return
-
+        let open Stubs.Ast in
+        Flow.join_list man.lattice
+          ~empty:(fun () -> flow)
+          (List.map
+             (fun prog ->
+               let body = prog.f_body in
+               let locals_vars = VarSet.elements (get_locals_var body) in
+               (* add vars to values domains *)
+               let range = srange body in
+               let f = Flow.add T_cur flow in
+               let add_vars =
+                 List.map
+                   (fun v ->
+                     mk_add
+                       (mk_var
+                          {
+                            v with
+                            vtyp =
+                              (match vtyp v with
+                              | T_J_U _ | T_J_Int -> T_int
+                              | a -> a);
+                          }
+                          range)
+                       range)
+                   locals_vars
+               in
+               List.iter
+                 (fun v ->
+                   Debug.debug ~channel:name "type %a : %a" pp_var v pp_typ
+                     (vtyp v))
+                 locals_vars;
+               let requires = get_requires_in_assumes prog in
+               let new_block =
+                 mk_block (add_vars @ requires @ [ body ]) range
+               in
+               man.exec new_block flow |> post_to_flow man |> Flow.remove T_cur)
+             prog.functions)
+        |> Post.return |> OptionExt.return
     | _ -> None
 
   let eval exp man flow = None
@@ -160,5 +169,4 @@ module EntryDomainJasmin = struct
 end
 
 let () = register_stateless_domain (module EntryDomainJasmin)
-
 let () = register_frontend { lang = "Jasmin"; parse = jasmin_parser }

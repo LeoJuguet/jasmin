@@ -47,7 +47,7 @@ module JasminTranslatorDomain = struct
     (*         |> OptionExt.return *)
     (*     | _ -> *)
     (*         None *)
-            (* | E_binop (op, expr1, expr2) when etyp exp <> T_int -> begin *)
+    (* | E_binop (op, expr1, expr2) when etyp exp <> T_int -> begin *)
     (*     Debug.debug ~channel:"Translator" "E_Binop : %a ; type : %a" pp_expr exp pp_typ (etyp exp); *)
     (*     man.eval ~translate:universal expr1 flow >>$? fun new_expr1 flow -> *)
     (*     man.eval ~translate:universal expr2 flow >>$? fun new_expr2 flow -> *)
@@ -62,8 +62,7 @@ module JasminTranslatorDomain = struct
     (*     |> Eval.add_translation universal new_expr *)
     (*   |> OptionExt.return *)
     (*     end *)
-    | _ ->
-        None
+    | _ -> None
 
   let ask _ _ _ = None
   let print_expr _ _ _ _ = ()

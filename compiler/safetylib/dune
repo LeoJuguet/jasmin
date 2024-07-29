@@ -1,6 +1,7 @@
 (include_subdirs unqualified)
 
 (library
-  (name jasmin_checksafety)
-  (flags (:standard -w -9-27-32-39-67))
-  (libraries jasmin yojson apron.octMPQ apron.ppl apron.boxMPQ))
+ (name jasmin_checksafety)
+ (flags
+  (:standard -w -9-27-32-39-67))
+ (libraries jasmin yojson apron.octMPQ apron.ppl apron.boxMPQ))

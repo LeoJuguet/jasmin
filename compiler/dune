@@ -1,36 +1,31 @@
-(subdir entry
-
-(library
+(subdir
+ entry
+ (library
   (name commonCLI)
   (wrapped false)
   (libraries cmdliner jasmin.jasmin)
   (modules commonCLI))
-
-(executable
- (public_name jasminc)
- (name jasminc)
- (modules jasminc)
- (modes byte exe)
- (libraries jasminc))
-
-(executable
- (public_name jasmin2tex)
- (name jasmin2tex)
- (modules jasmin2tex)
- (modes byte exe)
- (libraries commonCLI))
-
-(executable
- (public_name jasmin-ct)
- (name jasmin_ct)
- (modules jasmin_ct)
- (modes byte exe)
- (libraries commonCLI))
-
-(executable
- (public_name jasmin2ec)
- (name jasmin2ec)
- (modules jasmin2ec)
- (modes byte exe)
- (libraries commonCLI))
-)
+ (executable
+  (public_name jasminc)
+  (name jasminc)
+  (modules jasminc)
+  (modes byte exe)
+  (libraries jasminc))
+ (executable
+  (public_name jasmin2tex)
+  (name jasmin2tex)
+  (modules jasmin2tex)
+  (modes byte exe)
+  (libraries commonCLI))
+ (executable
+  (public_name jasmin-ct)
+  (name jasmin_ct)
+  (modules jasmin_ct)
+  (modes byte exe)
+  (libraries commonCLI))
+ (executable
+  (public_name jasmin2ec)
+  (name jasmin2ec)
+  (modules jasmin2ec)
+  (modes byte exe)
+  (libraries commonCLI)))

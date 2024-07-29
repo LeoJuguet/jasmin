@@ -24,10 +24,7 @@ module JasminFlowDomain = struct
         |> OptionExt.return
     | _ -> None
 
-  let eval expr man flow =
-    match ekind expr with
-   | _ -> None
-
+  let eval expr man flow = match ekind expr with _ -> None
   let ask _ _ _ = None
   let print_expr _ _ _ _ = ()
 end
