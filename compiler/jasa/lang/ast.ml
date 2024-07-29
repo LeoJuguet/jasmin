@@ -82,8 +82,26 @@ let string_of_wsize wsize=
 
 
 (** Builtin abstract expression *)
+(** use to analyze contract *)
 type jasmin_abstract_builtin =
-      Init_array
+      Init_array (* of expr * expr * expr *)
+    | Readable_memory (* of expr * expr * expr *)
+    | Writable_memory (* of expr * expr * expr *)
+    | Initialized_memory (* of expr * int * int *)
+
+let pp_jasmin_abstract_builtin fmt a = 
+  fprintf fmt (
+  match a with
+  | Init_array -> "init_array"
+  | Readable_memory -> "readable_memory"
+  | Writable_memory -> "writable_memory"
+  | Initialized_memory -> "initialized_memory"
+  )
+
+let compare_jasmin_abstract_builtin a1 a2 =
+  compare a1 a2
+
+
 
 (* Define Jasmin expr *)
 type expr_kind +=
@@ -143,8 +161,7 @@ let () =
           | E_J_return_vars vars ->
               fprintf fmt "ret_vars(%a)" (Jasmin.Utils.pp_list ", " pp_var) vars
           | E_stub_J_abstract (builtin, exprs) ->
-              let builtin_s = match builtin with Init_array -> "init_array" in
-              fprintf fmt "%s(%a)" builtin_s (Jasmin.Utils.pp_list ", " pp_expr) exprs
+              fprintf fmt "%a(%a)" pp_jasmin_abstract_builtin builtin (Jasmin.Utils.pp_list ", " pp_expr) exprs
           | _ -> next fmt e);
       visit =
         (fun default expr ->

@@ -8,6 +8,7 @@ fn f() -> reg u64 {
 
 fn g() -> reg u64 {
 	reg u64 a;
+	//a = 7;
 	a = f();
 	return a;
 }
