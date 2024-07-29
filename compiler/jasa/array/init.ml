@@ -4,6 +4,7 @@ open Universal.Ast
 open Stubs.Ast
 open Ast
 open Bot
+open Array_common
 module I = Mopsa.ItvUtils.IntItv
 module B = Mopsa.ItvUtils.IntBound
 
@@ -55,41 +56,6 @@ let () = register_simplified_value_abstraction (module SimplifiedValue)
 
 
 open Sig.Abstraction.Stateless
-
-
-type check +=
-  CHK_J_NOT_INIT_ARRAY
-
-let () =
-  register_check (fun next fmt check ->
-    match check with
-      | CHK_J_NOT_INIT_ARRAY -> Format.fprintf fmt "Jasmin array not initialized"
-      | _ -> next fmt check)
-
-type alarm_kind +=
-  A_J_NOT_INIT_ARRAY of var * I.t_with_bot
-
-let () =
-  register_alarm {
-    check = (fun next -> function
-        | A_J_NOT_INIT_ARRAY _ -> CHK_J_NOT_INIT_ARRAY
-        | a -> next a);
-    compare = (fun next a1 a2 ->
-      match a1, a2 with
-        | A_J_NOT_INIT_ARRAY (e1,i1), A_J_NOT_INIT_ARRAY(e2,i2) ->
-          Compare.compose [
-            (fun () -> compare_var e1 e2);
-            (fun () -> I.compare_bot i1 i2);
-          ]
-        | _ -> next a1 a2
-      );
-    print = (fun next fmt -> function
-        | A_J_NOT_INIT_ARRAY (arr, range) ->
-      Format.fprintf fmt "%a is maybe not init in range : %a" pp_var arr I.fprint_bot range
-        | a -> next fmt a
-      );
-    join = (fun next -> next);
-  }
 
 module Domain =
 struct

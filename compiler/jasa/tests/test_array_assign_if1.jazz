@@ -1,0 +1,24 @@
+
+fn f(reg u64 i) 
+{
+	reg ptr u64[10] a;
+
+
+	if(i < 0) {
+		i = 0;
+	}
+	
+	if(i >= 10){
+		i = 9;
+	}
+
+	if( i > 5 ) {
+		a[(int)i]  = 10;
+	}else{
+		a[(int)i] = 0;
+	}
+
+
+
+
+}

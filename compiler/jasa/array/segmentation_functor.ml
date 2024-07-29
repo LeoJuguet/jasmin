@@ -175,29 +175,34 @@ module ArraySegment = struct
     let mk_convex_join expr1 expr2 range =
       mk_binop ~etyp:T_int expr1 O_convex_join expr2 range
 
-    let sanitize va a ?(range=dummy_range) man flow =
+    let sanitize a ?(range=dummy_range) man flow =
       let debug s = Debug.debug ~channel:"array sanitize" s in
+      debug "start sanitize";
       let rec iter bounds segments flow = match bounds, segments with
       | (b1,p1) as bound::(b2,p2)::qbounds, s::seg when p2 = Present.MAYBE_EMPTY -> 
+        debug "MAYBE EMPTY";
         assume (mk_eq (mk_var b1 range) (mk_var b2 range) range)
           ~fthen:(fun flow ->
-        debug "case =";
+            debug "case =";
             man.exec (mk_remove_var b2 range) flow >>% fun flow ->
             man.exec (mk_remove_var s range) flow >>% fun flow ->
             iter (bound::qbounds) seg flow >>$ fun (bounds,segs) flow ->
             Cases.return (bounds,segs) flow
           )
           ~felse:(fun flow ->
-        debug "case <>";
+            debug "case <>";
             iter ((b2,p2)::qbounds) seg flow >>$ fun (bounds, segs) flow ->
             Cases.return (bound::bounds,s::segs) flow
           )
           ~fboth:(fun _ fflow -> 
-        debug "case both";
+            debug "case both";
             iter ((b2,p2)::qbounds) seg flow >>$ fun (bounds, segs) fflow ->
             Cases.return (bound::bounds,s::segs) flow
           )
         man flow
+      (* | (b1,p1) as bound::(b2,p2)::qbounds, s::seg when compare_var b1 b2 = 0 -> *) 
+        (* debug "born equal"; *)
+        (* iter (bound::bounds) seg flow *)
       | (b1,p1) as bound::((b2,p2) as bound2)::qbounds, s::seg ->
         debug "case not maybe empty";
         iter (bound2::qbounds) seg flow >>$ fun (bounds,segs) flow ->
@@ -205,9 +210,25 @@ module ArraySegment = struct
       | [bound],[] -> 
         debug "case [bound], []";
         Cases.return (bound::[],[]) flow
-      | _ -> panic_not_well_formed __LOC__
+      | _ -> 
+        debug "HERE2";
+        List.iter (fun a -> Format.printf "%a\n" pp_var (fst a)) a.bounds;
+        List.iter (fun a -> Format.printf "%a\n" pp_var (a)) a.segments;
+        panic_not_well_formed __LOC__
       in iter a.bounds a.segments flow >>$ fun (bounds, segments) flow ->
+      debug "end sanitize";
       Cases.return {bounds; segments} flow
+
+
+    type e = 
+      | EQUAL of (var* Present.t) * var * bool
+      | SOMETIMES_EQUAL
+      | NOT_EQUAL
+
+    let eq_to_pres = function
+      | EQUAL _ -> panic "not supported"
+      | SOMETIMES_EQUAL -> Present.MAYBE_EMPTY
+      | NOT_EQUAL -> Present.NON_EMPTY
     
     (* Assignment to an array element *)
     let set va a index value ?(len=mk_one dummy_range) ?(range = dummy_range) man flow =
@@ -232,19 +253,19 @@ module ArraySegment = struct
               assume (mk_eq (mk_var b range) index range)
                 ~fthen:(fun flow ->
                   debug "find_lower_bound : b = i";
-                  let pass = if is_zero then None else Some(bound,lseg) in
-                  find_upper_bound qbounds segments pass ~index_is_zero:is_zero flow >>$ fun ((out_b, out_s),add_bound) flow ->
+                  find_upper_bound qbounds segments (EQUAL(bound,lseg,is_zero)) ~index_is_zero:is_zero flow >>$ fun ((out_b, out_s),add_bound) flow ->
                   Cases.return ((if add_bound then bound::out_b else out_b), out_s) flow
                 )
                 ~felse:(fun flow ->
                   debug "find_lower_bound : b > i";
-                  find_upper_bound bounds (lseg::segments) None flow >>$ fun ((out_b,out_s),add_bound) flow ->
+                  find_upper_bound bounds (lseg::segments) NOT_EQUAL flow >>$ fun ((out_b,out_s),add_bound) flow ->
                   Cases.return ((if add_bound then bound::out_b else out_b), out_s) flow
                 )
                 man flow
             )
             ~fboth:(fun _ _ -> 
-              todo __LOC__
+                find_upper_bound qbounds (segments) SOMETIMES_EQUAL flow >>$ fun ((out_b,out_s),add_bound) flow ->
+                Cases.return ((if add_bound then bound::out_b else out_b), out_s) flow
             )
           man flow
         | (b,p) as bound :: [], [] ->
@@ -253,9 +274,8 @@ module ArraySegment = struct
               todo __LOC__ (* access out of bounds *)
             )
             ~felse:(fun flow ->
-              debug "find_lower_bound : b > i";
-              let pass = if prec_is_zero then None else Some(bound,lseg) in
-              find_upper_bound bounds (lseg::segments) pass flow >>$ fun ((bounds,seg),add_bound) flow ->
+              debug "find_lower_bound : b > i; b = len";
+              find_upper_bound bounds (lseg::segments) NOT_EQUAL flow >>$ fun ((bounds,seg),add_bound) flow ->
               Cases.return ((if add_bound then bound::bounds else bounds), seg) flow
             )
             ~fboth:(fun _ _ -> 
@@ -263,24 +283,33 @@ module ArraySegment = struct
             )
           man flow
         | _ -> todo __LOC__
-      and find_upper_bound bounds segments lower_bound ?(index_is_zero = false)  flow = match bounds, segments with
+      and find_upper_bound bounds segments low_relation ?(index_is_zero = false)  flow = match bounds, segments with
         | (b,p)as bound :: qbounds, s ::seg ->
           assume (mk_le (mk_var b range) upper_index range)
             ~fthen:(fun flow ->
               assume (mk_eq (mk_var b range) upper_index range)
                 ~fthen:(fun flow ->
                   debug "find_upper_bound : b = upper_index";
-                  match lower_bound with
-                  | Some ((bound,pres),var) ->
+                  match low_relation with
+                  | EQUAL ((bound,pres),var,is_zero) when not is_zero ->
+                  debug "find_upper_bound : equal not is_zero";
                     man.exec (mk_assign (mk_var var range) (mk_binop ~etyp:T_int (mk_var var range) O_convex_join value range) range) flow >>% fun flow ->
                     man.exec (mk_remove_var bound range) flow >>% fun flow ->
-                    man.exec (mk_forget_var s range) flow >>% fun flow ->
+                    man.exec (mk_remove_var var range) flow >>% fun flow ->
                     Cases.return ((bounds, seg),false) flow
-                  | None when index_is_zero ->
-                  debug "find_upper_bound : b = upper_index is_zero";
-                    man.exec (mk_assign (mk_var s range) value range) flow >>% fun flow ->
-                    Cases.return ((bounds,segments),true) flow
-                  | None -> 
+                  | EQUAL((bound,pres),var,is_zero) when is_zero ->
+                    debug "find_upper_bound : equal is_zero";
+                    (* man.exec (mk_assign (mk_var s range) value range) flow >>% fun flow -> *)
+                    if seg <> [] then
+                    man.exec (mk_assign (mk_var (List.hd seg) range) (mk_binop ~etyp:T_int (mk_var (List.hd seg) range) O_convex_join value range) range) flow >>% fun flow ->
+                    man.exec (mk_remove_var bound range) flow >>% fun flow ->
+                    man.exec (mk_forget_var s range) flow >>% fun flow ->
+                    Cases.return ((qbounds,seg),true) flow
+                    else
+                    man.exec (mk_assign (mk_var var range) value range) flow >>% fun flow ->
+                    Cases.return ((bounds,segments), true) flow
+                  | NOT_EQUAL | SOMETIMES_EQUAL -> 
+                  debug "find_upper_bound : not equal or sometimes equal";
                     (* lower bound is zero so we can't reassign *)
                     if qbounds = [] then (
                     (* last index (aka length) can't reassign *)
@@ -296,6 +325,7 @@ module ArraySegment = struct
                       man.exec (mk_assign (mk_var b range) (index) range) flow >>% fun flow ->
                       Cases.return ((qbounds,seg),true) flow
                     )
+                  | EQUAL _ -> panic "impossible"
                   )
                 ~felse:(fun flow ->
                   debug "find_upper_bound : b < upper_index";
@@ -309,36 +339,56 @@ module ArraySegment = struct
             )
             ~felse:(fun flow ->
               debug "find_upper_bound : b > i + len";
-              match lower_bound with
-              | Some ((bound,pres),var) ->
+              match low_relation with
+              | EQUAL ((bound,pres),var,is_zero) when not is_zero ->
+                debug "find_upper_bound cas equal";
                 man.exec (mk_assign (mk_var var range) (mk_binop ~etyp:T_int (mk_var var range) O_convex_join value range) range) flow >>% fun flow ->
                 man.exec (mk_assign (mk_var bound range) upper_index range) flow >>% fun flow ->
                 Cases.return ((bounds, segments),true) flow
-              | None -> 
+              | EQUAL (_,_,_) when index_is_zero -> 
                 (* lower bound is zero so we can't reassign *)
+                debug "find_upper_bound cas equal is zero";
                 let new_bound = mkv_bounds va in
                 man.exec (mk_assign (mk_var new_bound range) upper_index range) flow >>% fun flow ->
                 seg_var_used := true;
                 man.exec (mk_assign seg_var value range) flow >>% 
                 Cases.return (((new_bound, Present.NON_EMPTY)::bound::qbounds, seg_var_var::s::seg ), true) 
+              | NOT_EQUAL | SOMETIMES_EQUAL -> 
+                (* lower bound is zero so we can't reassign *)
+                debug "find_upper_bound cas not equal or sometimes equal";
+                let new_bound_low = mkv_bounds va in
+                let new_bound = mkv_bounds va in
+                let new_seg = mkv_element va in
+                man.exec (mk_assign (mk_var new_bound_low range) index range) flow >>% fun flow ->
+                man.exec (mk_assign (mk_var new_bound range) upper_index range) flow >>% fun flow ->
+                man.exec (mk_assign (mk_var new_seg range) (mk_var s range) range) flow >>% fun flow ->
+                seg_var_used := true;
+                man.exec (mk_assign seg_var value range) flow >>% 
+                Cases.return (((new_bound_low, eq_to_pres low_relation)::(new_bound, Present.NON_EMPTY)::bound::qbounds, seg_var_var::new_seg::seg ), false) 
+              | EQUAL _ -> assert false
             )
             ~fboth:(fun _ _ ->
               debug "find_upper_bound : b <= i && b > i : b = %a ; i = %a" pp_var b pp_expr upper_index;
               assume (mk_le upper_index (mk_var b range) range)
                 ~fthen:(fun flow ->
                   debug "find_upper_bound : b >= i";
-                  match lower_bound with
-                  | Some ((bound,pres),var) ->
+                  match low_relation with
+                  | EQUAL ((bound,pres),var,is_zero) when not is_zero ->
                     man.exec (mk_assign (mk_var var range) (mk_binop ~etyp:T_int (mk_var var range) O_convex_join value range) range) flow >>% fun flow ->
                     man.exec (mk_assign (mk_var bound range) upper_index range) flow >>% fun flow ->
                     Cases.return (((b,Present.MAYBE_EMPTY)::qbounds, segments),true) flow
-                  | None -> 
+                  | _ -> 
                     (* lower bound is zero so we can't reassign *)
+                    let new_bound_low = mkv_bounds va in
                     let new_bound = mkv_bounds va in
+                    let new_seg = mkv_element va in
+                    man.exec (mk_assign (mk_var new_bound_low range) index range) flow >>% fun flow ->
                     man.exec (mk_assign (mk_var new_bound range) upper_index range) flow >>% fun flow ->
+                    man.exec (mk_assign (mk_var new_seg range) (mk_var s range) range) flow >>% fun flow ->
                     seg_var_used := true;
                     man.exec (mk_assign seg_var value range) flow >>% 
-                    Cases.return (((new_bound, Present.NON_EMPTY)::(b,Present.MAYBE_EMPTY)::qbounds, seg_var_var::s::seg ), true) 
+                    Cases.return (((new_bound_low, eq_to_pres low_relation)::(new_bound, Present.NON_EMPTY)::(b,Present.MAYBE_EMPTY)::qbounds, 
+                                    new_seg::seg_var_var::s::seg ), true) 
                   )
                 ~felse:(fun flow ->
                   debug "find_upper_bound : b > i + len impossible case";
@@ -370,9 +420,9 @@ module ArraySegment = struct
         List.iter (fun (a) -> Format.printf "%a" pp_var a) a.segments; 
           panic_not_well_formed __LOC__
 
-    let get a index ?(len= mk_one dummy_range) ?(range = dummy_range) man flow = 
+    let get arr index ?(len= mk_one dummy_range) ?(range = dummy_range) man flow = 
       let index_plus = mk_binop index O_plus len range in
-      sanitize a a man flow >>$ fun arr flow ->
+      (* sanitize a man flow >>$ fun arr flow -> *)
       debug "get sanitize : %a \n %a"
           (format (Flow.print man.lattice.print)) flow
            fprint_array_segments arr
@@ -484,6 +534,37 @@ module ArraySegment = struct
 
     let merge pre (a,e) (a',e') =
       panic ~loc:__LOC__ "Merge is impossible with ArraySegment"
+
+
+
+
+
+
+
+    let true_join man ctx (a1,s) (a2,s') =
+      let _ = env_exec (fun flow ->
+      Debug.debug ~channel:"test" "flow1 : %a"
+          (format (Flow.print man.lattice.print)) flow;
+        man.eval (mk_var (fst @@ List.hd a1.bounds) dummy_range) ~translate:"Universal" flow >>$ fun e flow ->
+        Debug.debug ~channel:"test" "expr : %a" pp_expr e;
+        env_exec (fun flow2 ->
+          Debug.debug ~channel:"test" "flow2 : %a"
+          (format (Flow.print man.lattice.print)) flow2;
+          Post.return flow2
+        ) ctx man s';
+        todo __LOC__
+      ) ctx man s in
+    todo __LOC__
+
+
+
+
+
+
+
+
+
+
 
 
     let add_arr var typ range man flow = match typ with
@@ -719,11 +800,12 @@ module Domain = struct
     
     let subset man ctx (a1,s) (a2,s') =
       (* let (s,s') = do_op man ctx ArraySegment.Element.bottom ArraySegment.Element.top (a1,s) (a2,s') in *)
-      Debug.debug ~channel:name "subset %a %a" (Print.format Arrays.print) a1 (Print.format Arrays.print) a2;
-      ( Arrays.fold2zo (fun _ _ _ -> false) (fun _ _ out -> out) (fun _ a1 a2 out -> 
+      let r =Arrays.fold2zo (fun _ _ _ -> false) (fun _ _ out -> out) (fun _ a1 a2 out -> 
         if out then ArraySegment.subset a1 a2
         else out
-      ) a1 a2 true, s, s')
+      ) a1 a2 true in
+      Debug.debug ~channel:name "subset %a %a \b is_sub : %b" (Print.format Arrays.print) a1 (Print.format Arrays.print) a2 r;
+      (r , s, s')
 
     let join man ctx (a1,s) (a2,s') =
       (* let (s,s') = do_op man ctx ArraySegment.Element.bottom ArraySegment.Element.bottom (a1,s) (a2,s') in *)
@@ -731,9 +813,21 @@ module Domain = struct
       match a1, a2 with 
       | BOT, a2 -> (a2, s, s')
       | a1, BOT -> (a1,s,s')
-      | _ -> 
+      | a1,a2 -> 
       (* (Arrays.join a1 a2, s , s') *)
       (* todo __LOC__ *)
+      (* let a = Arrays.fold2zo *) 
+        (* (fun b init acc -> *) 
+        (* Debug.debug ~channel:name "ouiiiiii 1"; *)
+        (* acc) *)
+        (* (fun b' init acc -> *) 
+        (* Debug.debug ~channel:name "ouiiiiii 2"; *)
+        (* acc) *)
+        (* (fun base init init' (s,s') -> *) 
+        (* Debug.debug ~channel:name "ouiiiiii"; *)
+        (* let a = ArraySegment.true_join man ctx (init,s) (init',s') in todo __LOC__ *)
+        (* ) *)
+      (* a1 a2 (s,s') in *)
       (a2,s,s')
 
     let meet man ctx (a1,s) (a2,s') =
@@ -790,6 +884,8 @@ module Domain = struct
       | S_assign({ekind = E_J_Laset(access,wsize,var,index)}, expr) -> 
         man.eval expr flow >>$? fun e flow ->
         let range = srange stmt in
+        if is_bottom (get_env T_cur man flow) then Cases.empty flow |> OptionExt.return 
+        else
         let arr = Arrays.find var (get_env T_cur man flow) in
         ArraySegment.set var arr index e ~range man flow >>$? fun arr_val flow ->
         map_env T_cur (Arrays.add var {bounds = fst arr_val; segments = snd arr_val}) man flow
@@ -804,14 +900,17 @@ module Domain = struct
         map_env T_cur (Arrays.add arr {bounds = fst arr_val; segments = snd arr_val}) man flow
         |> Post.return
         |> OptionExt.return
-    
       | _ -> None
 
     let eval expr man flow = match ekind expr with
     | E_J_get(arr_access,wsize,var,index) ->
         let range = erange expr in
+        if is_bottom (get_env T_cur man flow) then Cases.empty flow |> OptionExt.return 
+        else
         let arr = Arrays.find var (get_env T_cur man flow) in
-        ArraySegment.get arr index ~range man flow
+        ArraySegment.sanitize arr ~range man flow >>$? fun arr_out flow ->
+        map_env T_cur (Arrays.add var arr_out) man flow
+        |> ArraySegment.get arr_out index ~range man
         |> OptionExt.return
     | E_stub_J_abstract(Init_array,[{ekind = E_var(arr,_)};pos;len])  ->
       (* Cases.return (mk_false (erange expr)) flow *)
@@ -835,6 +934,7 @@ module Domain = struct
     (** ****************** *)
 
     let print_state printer a =
+      Debug.debug ~channel:name "oui";
       pprint printer ~path:[Key "arrays"] (pbox Arrays.print a)
 
     let print_expr man flow printer exp =

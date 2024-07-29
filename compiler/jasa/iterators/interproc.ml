@@ -34,31 +34,21 @@ module Domain = struct
         match result with
         | TOP -> (Debug.debug "TOP TOP";
         let block = List.map (fun expr ->
-            mk_assign expr (mk_top (etyp expr) range) range
+            [
+            (* mk_remove expr range; *) 
+            mk_assign expr (mk_top (etyp expr) range) range;
+            mk_assign expr (mk_constant ~etyp:(etyp expr) (Initialized.(C_init Init.INIT)) range) range
+            ]
         ) lvars in
-        let block = mk_block block range in
+        let block = mk_block (List.concat block) range in
         man.exec block flow
         |> OptionExt.return
         )
         | BOT -> Debug.debug "BOT BOT"; None
         | Nbt a -> Debug.debug "%a" (Jasmin.Utils.pp_list ", " pp_expr) a; None
       )
-
-        (*let stub = mk_pass range in
-        man.exec stub flow >>$? fun expr flow ->
-        Eval.singleton expr flow
-        |> OptionExt.return*)
-    | S_J_return (vars) ->
-      (* man.exec (mk_stmt (S_return (Some (mk_expr (E_J_return_vars vars) range))) range) flow >>%? fun flow -> *)
-      (* (\* Now clean the post-state using scope updater *\) *)
-      (* (\* To do that, first move the return environment to cur *\) *)
-      (* let flow = Flow.copy (T_return stmt.srange) T_cur man.lattice flow flow in *)
-      (* (\* Finally, move cur to return flow *\) *)
-      (* let cur = Flow.get T_cur man.lattice flow in *)
-      (* Flow.set (T_return (stmt.srange)) cur man.lattice flow |> *)
-      (* Flow.remove T_cur |> *)
-      (* Post.return |> OptionExt.return *)
-      None
+   | S_J_return (vars) ->
+     None
 
     | _ -> None
 
