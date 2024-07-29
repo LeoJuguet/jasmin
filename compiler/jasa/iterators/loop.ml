@@ -19,11 +19,10 @@ module Domain = struct
     | S_J_for (var, (dir, start, last), body) ->
         let range = stmt.srange in
 
-        let s = start in
         let var = { var with vtyp = T_int } in
         let var = mk_var var range in
         (* forloop initialisation : var = start *)
-        let init = mk_assign var s range in
+        let init = mk_assign var start range in
 
         (* correct operation direction *)
         let op_dir = match dir with UpTo -> O_plus | DownTo -> O_minus in

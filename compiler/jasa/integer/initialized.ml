@@ -287,6 +287,7 @@ module Domain = struct
         |> man.exec stmt ~route:(Below name)
         |> OptionExt.return
     | S_J_return vars ->
+        (* check if the scalar variables returned have been initialised *)
         let range = srange stmt in
         Cases.bind_list
           (List.map (fun v -> mk_var v range) vars)
@@ -300,7 +301,6 @@ module Domain = struct
             else flow)
           flow args
         |> Post.return |> OptionExt.return
-    | S_J_call (lval, fname, args) -> None
     | _ -> None
 
   let eval expr man flow = None
