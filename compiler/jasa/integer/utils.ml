@@ -8,13 +8,7 @@ open Jasmin.Wsize
 module IntItv = Universal.Numeric.Values.Intervals.Integer.Value
 module FltItv = Universal.Numeric.Values.Intervals.Float.I
 
-let wsize_to_int = function
-  | U8 -> 8
-  | U16 -> 16
-  | U32 -> 32
-  | U64 -> 64
-  | U128 -> 128
-  | U256 -> 256
+let wsize_to_int ws = 8 * Prog.size_of_ws ws
 
 let wsize_to_z wsize = Z.of_int @@ wsize_to_int wsize
 

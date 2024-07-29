@@ -23,8 +23,8 @@ module Domain = struct
           | Some f_info -> f_info.f_stub
           | None -> panic "function %s not found" func.fn_name
         in
-        let s = Stubs.Ast.mk_stub_call stub args range in
-        man.eval s flow >>$? fun expr flow ->
+        let stub_call = Stubs.Ast.mk_stub_call stub args range in
+        man.eval stub_call flow >>$? fun expr flow ->
         match ekind expr with
         | E_J_return_vars vars ->
             panic "output is E_J_return_vars ... : %a : %a" pp_expr expr pp_typ

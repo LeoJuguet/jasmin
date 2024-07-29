@@ -73,9 +73,7 @@ module EntryDomainJasmin = struct
   let init prog man flow =
     match prog.prog_kind with
     | Jasmin_Program jprog ->
-        Debug.debug ~channel:name "%a" pp_program prog;
         Debug.debug ~channel:name "init jasmin program\n";
-        (* really mandatory ? *)
         set_jasmin_program jprog flow |> set_target_info (module Arch)
     | _ -> flow
 
@@ -106,23 +104,7 @@ module EntryDomainJasmin = struct
 
   let exec stmt man flow =
     match skind stmt with
-    (* | S_program ({ prog_kind = Jasmin_Program prog }, _) -> *)
-    (*     (\* List.iter *\) *)
-    (*     (\*   (fun func -> pp_stmt Format.std_formatter func.f_body) *\) *)
-    (*     (\*   prog.functions; *\) *)
-
-    (*     let prog = (List.hd prog.functions).f_body in *)
-    (*     let locals_vars = VarSet.elements (get_locals_var prog) in *)
-    (*     (\* add vars to values domains *\) *)
-    (*     let range = srange prog in *)
-    (*     let add_vars = List.map (fun v -> mk_add (mk_var {v with vtyp = match vtyp v with *)
-    (*           T_J_U _ | T_J_Int -> T_int | a -> a} range) range) locals_vars in *)
-    (*     let new_block = mk_block (add_vars @ [prog])  range in *)
-    (*     man.exec new_block flow |> OptionExt.return *)
     | S_program ({ prog_kind = Jasmin_Program prog }, _) ->
-        (* List.iter *)
-        (*   (fun func -> pp_stmt Format.std_formatter func.f_body) *)
-        (*   prog.functions; *)
         let open Stubs.Ast in
         Flow.join_list man.lattice
           ~empty:(fun () -> flow)
