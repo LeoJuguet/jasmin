@@ -63,12 +63,10 @@ let () =
           match t with
           | T_J_U wsize ->
               fprintf fmt "T_J_U%s"
-                (String.of_seq
-                   (List.to_seq (Jasmin.Wsize.string_of_wsize wsize)))
+                (Jasmin.Wsize.string_of_wsize wsize)
           | T_J_Array (wsize, len) ->
               fprintf fmt "T_J_Array(U%s,%i)"
-                (String.of_seq
-                   (List.to_seq (Jasmin.Wsize.string_of_wsize wsize)))
+                (Jasmin.Wsize.string_of_wsize wsize)
                 len
           | T_J_Return ltyp ->
               fprintf fmt "return_t(%a)"
@@ -77,8 +75,7 @@ let () =
     }
 
 let string_of_wsize wsize=
-          (String.of_seq
-                   (List.to_seq (Jasmin.Wsize.string_of_wsize wsize)))
+          Jasmin.Wsize.string_of_wsize wsize
 
 
 (** Builtin abstract expression *)
@@ -445,7 +442,7 @@ let rec jasmin_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ]) ?(
   | Pbool bool -> mk_bool bool range
   | Parr_init len -> mk_expr (E_J_arr_init len) range
   | Pvar var -> mk_var (jasmin_to_mopsa_var var.gv.pl_desc) range
-  | Pget (warray, wsize, var, expr) ->
+  | Pget (_, warray, wsize, var, expr) ->
       mk_expr
         ~etyp:(T_J_U wsize)
         (E_J_get
@@ -462,7 +459,7 @@ let rec jasmin_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ]) ?(
       len,
       jasmin_to_mopsa_var var.gv.pl_desc,
       jasmin_to_mopsa_expr ~translate_info expr ~range)) range
-  | Pload (wsize, var, expr) ->
+  | Pload (_, wsize, var, expr) ->
       mk_expr
         (E_J_load
            ( wsize,
@@ -542,14 +539,14 @@ and jasmin_lval_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ]) ?
   | Lnone (loc, typ) -> mk_expr (E_J_Lnone (jasmin_to_mopsa_type typ)) range
   | Lvar var -> (* mk_expr (E_J_Lvar (jasmin_to_mopsa_var var.pl_desc)) range *)
     mk_var (jasmin_to_mopsa_var var.pl_desc) range
-  | Lmem (wsize, var, expr) ->
+  | Lmem (_, wsize, var, expr) ->
       mk_expr
         (E_J_Lmem
            ( wsize,
              jasmin_to_mopsa_var var.pl_desc,
              jasmin_to_mopsa_expr ~translate_info ~range expr ))
         range
-  | Laset (arr_access, wsize, var, expr) ->
+  | Laset (_, arr_access, wsize, var, expr) ->
       mk_expr
         (E_J_Laset
            ( arr_access,
