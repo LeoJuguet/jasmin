@@ -33,7 +33,7 @@ OBELISK ?= obelisk
 
 # --------------------------------------------------------------------
 .PHONY: all build byte native CIL check check-ci
-.PHONY: clean install uninstall dist
+.PHONY: clean install uninstall dist jasa
 
 all: build
 	@true
@@ -54,7 +54,7 @@ native:
 
 jasa:
 	$(RM) jasa.exe
-	dune build jasa
+	dune build @check jasa
 	ln -sf "_build/default/jasa/jasa.exe" jasa.exe
 
 CIL:
