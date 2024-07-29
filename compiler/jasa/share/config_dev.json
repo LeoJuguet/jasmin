@@ -18,7 +18,8 @@
 					,"jasmin.translator"
 					,"jasmin.integer.overflow"
 //					,"jasmin.memory.array_init"
-					,"jasmin.array.segments"
+					//,"jasmin.array.segments"
+					,"jasmin.array.segments3"
 					,"jasmin.array.init"
 					,"jasmin.memory.array"
 
