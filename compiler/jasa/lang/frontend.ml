@@ -33,7 +33,7 @@ let opt_functions = ref []
 let () =
   register_language_option "Jasmin"
     {
-      key = "-jazz-strip";
+      key = "-jazz-slice";
       category = "Jasmin";
       doc = " select functions to check";
       spec = ArgExt.Set_string_list opt_functions;
