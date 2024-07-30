@@ -15,7 +15,6 @@
 
 					,"jasmin.stubs.body"
 
-					,"jasmin.translator"
 					,"jasmin.integer.overflow"
 //					,"jasmin.memory.array_init"
 					//,"jasmin.array.segments"
