@@ -163,6 +163,8 @@ module ArraySegment = struct
     let index_up = mk_binop index O_plus len range in
     match (a.bounds, a.segments) with
     | [ zero; b1; b2; bounds ], [ s1; s2; s3 ] ->
+      assume (mk_log_and (mk_le (mk_var zero range) index range) (mk_le index_up (mk_var bounds range) range) range)
+        ~fthen:(fun flow ->
         assume
           (mk_eq (mk_var b1 range) index range)
           ~fthen:(fun flow ->
@@ -249,11 +251,15 @@ module ArraySegment = struct
                              range)
                           flow)
                       man flow)
-                  ~felse:(fun flow -> (* b2 > i + len*)
-                                      todo __LOC__)
+                  ~felse:(fun flow -> (* b2 < i + len*)
+                        man.exec (mk_assign (mk_var b2 range) index_up range) flow
+                        >>% man.exec (mk_assign (mk_var s2 range) value range)
+                      )
                   ~fboth:(fun _ _ ->
                     (* b2 > i + len && b2 <= i + len*)
-                    todo __LOC__)
+                        man.exec (mk_assign (mk_var b2 range) index_up range) flow
+                        >>% man.exec (mk_assign (mk_var s2 range) (mk_convex_join (mk_var s3 range) value range) range)
+                    )
                   man flow)
               man flow)
           ~felse:(fun flow ->
@@ -310,7 +316,8 @@ module ArraySegment = struct
                         assume
                           (mk_eq (mk_var b2 range) (mk_var bounds range) range)
                           ~fthen:(fun flow ->
-                            todo __LOC__ (* raise warning over bounds*))
+                            assert false (* out of bounds *)
+                            )
                           ~felse:(fun flow ->
                             man.exec
                               (mk_assign (mk_var b2 range) index_up range)
@@ -329,7 +336,8 @@ module ArraySegment = struct
                                  range)
                               flow)
                           ~fboth:(fun _ _ ->
-                            todo __LOC__ (* raise warning over bounds *))
+                            assert false (* out of bounds *)
+                            )
                           man flow)
                       man flow)
                   ~fboth:(fun _ _ ->
@@ -399,8 +407,70 @@ module ArraySegment = struct
                   man flow)
               ~fboth:(fun _ _ -> todo __LOC__)
               man flow)
-          ~fboth:(fun _ _ -> todo __LOC__)
-          man flow
+          ~fboth:(fun _ _ -> 
+            (* b1 = i && b1 <> i *)
+            assume (mk_le (mk_var b1 range) index range)
+              ~fthen:(fun flow ->
+                (* b1 <= i *)
+                assume (mk_le index_up (mk_var b2 range) range)
+                  ~fthen:(fun flow ->
+                    (* i + len <= b2*)
+                    man.exec (mk_assign (mk_var s2 range) (mk_convex_join (mk_var s2 range) value range) range) flow
+                  )
+                  ~felse:(fun flow -> 
+                    (* i + len > b2 *)
+                    man.exec (mk_assign (mk_var s2 range) (mk_convex_join (mk_var s2 range) value range) range) flow
+                    >>% man.exec (mk_assign (mk_var b2 range) index_up range)
+                  )
+                  ~fboth:(fun _ _ ->
+                    (* i + len <= b2 && i + len > b2*)
+                    (* => b2 = max(i+len)*)
+                    let query = mk_avalue_query index_up Universal.Numeric.Common.V_int_interval in
+                    man.ask query flow >>$ fun interval flow ->
+                    match interval with
+                    | Nb (_,up) ->
+                      let up = 
+                        let open ItvUtils.IntBound in
+                        match up with
+                        | Finite x -> mk_z x range
+                        | _ -> mk_var bounds range in
+                    man.exec (mk_assign (mk_var s2 range) (mk_convex_join (mk_var s2 range) value range) range) flow
+                    >>% man.exec (mk_assign (mk_var b2 range) up range)
+                    | _ -> assert false
+                  )
+                  man flow
+              )
+              ~felse:(fun flow -> 
+                (* i <= b1 *)
+                man.exec (mk_assign (mk_var b1 range) index range) flow
+                >>% 
+                assume (mk_le index_up (mk_var b2 range) range)
+                  ~fthen:(fun flow ->
+                    todo __LOC__
+                  )
+                  ~felse:(fun flow ->
+                    todo __LOC__
+                  )
+                  ~fboth:(fun _ _ ->
+                    todo __LOC__
+                  )
+                man
+              )
+              ~fboth:(fun _ _ ->
+                (* b1 <= i && b1 >= i *)
+                todo __LOC__
+              )
+              man flow
+          )
+          man flow)
+        ~felse:(fun flow ->
+          (* out of bounds access *)
+          let callstack = Flow.get_callstack flow in 
+          let alarm = mk_alarm (A_J_out_of_bounds_array (mk_var va range,index)) callstack range in
+          Flow.raise_alarm alarm man.lattice flow 
+          |> Post.return
+        )
+        man flow
     | _ -> panic_not_well_formed __LOC__
 
   let get arr index ?(len = mk_one dummy_range) ?(range = dummy_range) man flow
