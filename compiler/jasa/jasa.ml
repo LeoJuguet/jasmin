@@ -1,6 +1,5 @@
 (* include Ast *)
 module Jasmin_lang = Jazz_lang
-module Translator = Translator
 module Iterators = Iterators
 module Integer = Integer
 module Memory = Memory

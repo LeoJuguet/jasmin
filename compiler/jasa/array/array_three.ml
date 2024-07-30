@@ -112,7 +112,9 @@ module ArraySegment = struct
   let mk_segment_array_element arr range man flow =
     let v = mkv_element arr in
     let ex = mk_add (mk_var v range) range in
-    man.exec ex flow >>$ fun out flow -> Cases.return v flow
+    man.exec ex flow >>% 
+    man.exec (mk_assign (mk_var v range) (mk_top T_int range) range) >>%
+    Cases.return v
 
   let mk_convex_join expr1 expr2 range =
     mk_binop ~etyp:T_int expr1 O_convex_join expr2 range
