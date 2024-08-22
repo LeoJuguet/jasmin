@@ -1,0 +1,58 @@
+{
+	"language" : "Jasmin",
+		"domain" : {
+			"switch" : [
+			{
+				"semantic": "Jasmin",
+				"switch": [
+					"jasmin.program"
+					,"jasmin.declare"
+					,"jasmin.iterators.loop"
+					,"jasmin.iterators.intraproc"
+					,"jasmin.iterators.interproc"
+					,"jasmin.integer.init"
+					,"stubs.iterators.body"
+
+					,"jasmin.stubs.body"
+
+					,"jasmin.array.segments3"
+					,"jasmin.array.init"
+					,"jasmin.memory.array"
+
+					,"stubs.iterators.fallback"
+				]
+			},
+			{
+				"semantic": "Universal",
+				"switch": [
+				"universal.iterators.intraproc",
+				"universal.iterators.loops",
+				"universal.iterators.interproc.inlining",
+				"universal.iterators.unittest",
+				// numeric environment
+				{
+					"product": [
+						"universal.numeric.relational",
+					{	
+					"nonrel" :	"jasmin.integer.initialized"
+					},
+					{
+						"nonrel": 
+								"universal.numeric.values.intervals.integer"
+
+					},
+					{
+						"nonrel": 
+								"jasmin.stub.return"
+
+					}
+					],
+					"reductions": [
+						"universal.numeric.reductions.intervals_rel"
+					]
+				}
+				]
+			}
+			]
+		}
+}
