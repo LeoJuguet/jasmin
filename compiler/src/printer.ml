@@ -491,9 +491,9 @@ let pp_export_info ?(json=true) fmt prog asm_prog =
 
   in
 
-  let pp_funcs fmt (prog,(fname,f)) =
+  let pp_func fmt (prog,(fname,f)) =
     if json then 
-      Format.fprintf fmt "@[<v>\"%a\":@ {@[<hv>@ \"vars\" : [%a]@]@\n}@]"
+      Format.fprintf fmt "@[<hv>{@[<hv>@ \"name\" : \"%a\",@ \"vars\" : [%a]@]@\n}@]"
         pp_funname fname
         pp_aligned_args (prog.f_args, f)
     else
@@ -503,11 +503,11 @@ let pp_export_info ?(json=true) fmt prog asm_prog =
   
   in
   if json then 
-    Format.fprintf fmt "@[<v>{@[%a@]}@]@."
-      (pp_list ",@\n" pp_funcs) (List.rev funcs)
+    Format.fprintf fmt "@[<v>{@[\"functions\":@ [@[<h>%a@]]@]}@]@."
+      (pp_list ",@\n" pp_func) (List.rev funcs)
   else
     Format.fprintf fmt "@[<v>%a@]@."
-      (pp_list "@ " pp_funcs) (List.rev funcs)
+      (pp_list "@ " pp_func) (List.rev funcs)
 
 (* ----------------------------------------------------------------------- *)
 
