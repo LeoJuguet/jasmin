@@ -443,23 +443,71 @@ let pp_sprog ~debug pd asmOp fmt ((funcs, p_extra):('info, 'asm) Prog.sprog) =
      (pp_list "@ @ " pp_fun) (List.rev funcs)
   
 (** Pretty printer for displaying export inforamation after compilation *)
-let pp_export_info_asm_prog fmt asm_prog =
+let pp_export_info ?(json=true) fmt prog asm_prog =
   let open Arch_decl in 
-  (* filter only export functions *)
-  let funcs = List.filter (fun (_,f) -> f.asm_fd_export ) asm_prog.asm_funcs in
+
+  let funcs_prog = snd prog in 
+
+  (* merge together the prog and the associated assembly of exported functions *)
+  let funcs =
+    List.filter_map (fun ((fname,asm_func) as asm) ->
+      match List.find_opt (fun func_prog -> func_prog.f_name = fname) funcs_prog with
+      | Some p when asm_func.asm_fd_export -> Some (p, asm)
+      | _ -> None
+    ) asm_prog.asm_funcs
+
+  in
 
   let pp_funname fmt fname =
     Format.fprintf fmt "%s" fname.fn_name
   in
 
-  let pp_funcs fmt (fname,f) =
-    Format.fprintf fmt "@[<v>%a:@ @[<hv>@ argument alignment = [%a]@]@]"
-      pp_funname fname
-      (pp_list ", " pp_wsize) (f.asm_fd_align_args)
+  let pp_aligned_args fmt (prog, f) =
+    let aligned_args = if json then
+        (* don't need to filter for json *)
+          List.map2 (fun prog align -> (prog,align)) prog f.Arch_decl.asm_fd_align_args
+        else
+          (* filter only important alignements (>8) *)
+          Utils.List.filter_map2
+            (fun prog align ->
+              if align <> W.U8 then Some (prog,align) else None
+            )
+            prog f.Arch_decl.asm_fd_align_args
+    in
+
+    let pp_aligned_arg fmt (prog, align) =
+      if json then
+        Format.fprintf fmt "@[{@[\"name\": \"%a\", \"align\" : %a  @]}@]"
+          (pp_var ~debug:false) prog
+          (pp_wsize ) align
+      else
+        Format.fprintf fmt "@[%a : %a @]"
+          (pp_var ~debug:false) prog
+          (pp_wsize ) align
+    in
+
+    Format.fprintf fmt "@[%a@]"
+      (pp_list ",@\n" pp_aligned_arg) aligned_args 
+
+  in
+
+  let pp_funcs fmt (prog,(fname,f)) =
+    if json then 
+      Format.fprintf fmt "@[<v>\"%a\":@ {@[<hv>@ \"vars\" : [%a]@]@\n}@]"
+        pp_funname fname
+        pp_aligned_args (prog.f_args, f)
+    else
+      Format.fprintf fmt "@[<hv>%a:@ @[<hv>@ argument alignment = [%a]@]@]"
+        pp_funname fname
+        pp_aligned_args (prog.f_args, f)
   
   in
-  Format.fprintf fmt "@[<v>%a@]@."
-    (pp_list "@ " pp_funcs) (List.rev funcs)
+  if json then 
+    Format.fprintf fmt "@[<v>{@[%a@]}@]@."
+      (pp_list ",@\n" pp_funcs) (List.rev funcs)
+  else
+    Format.fprintf fmt "@[<v>%a@]@."
+      (pp_list "@ " pp_funcs) (List.rev funcs)
 
 (* ----------------------------------------------------------------------- *)
 
