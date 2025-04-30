@@ -458,8 +458,17 @@ let pp_export_info ?(json=true) fmt prog asm_prog =
 
   in
 
+  let pp_size fmt i =
+    Format.fprintf fmt "%i" i
+  in
+
   let pp_funname fmt fname =
     Format.fprintf fmt "%s" fname.fn_name
+  in
+
+  let pp_type fmt var =
+      Format.fprintf fmt "%a"
+      (pp_gtype ?w:None pp_size) var.v_ty
   in
 
   let pp_aligned_args fmt (prog, f) =
@@ -477,8 +486,10 @@ let pp_export_info ?(json=true) fmt prog asm_prog =
 
     let pp_aligned_arg fmt (prog, align) =
       if json then
-        Format.fprintf fmt "@[{@[\"name\": \"%a\", \"align\" : %a  @]}@]"
+        Format.fprintf fmt "@[{@[\"name\": \"%a\", \"kind\" : \"%a\", \"type\" : \"%a\", \"align\" : %a @]}@]"
           (pp_var ~debug:false) prog
+          pp_kind prog.v_kind
+          pp_type prog
           (pp_wsize ) align
       else
         Format.fprintf fmt "@[%a : %a @]"
@@ -491,16 +502,30 @@ let pp_export_info ?(json=true) fmt prog asm_prog =
 
   in
 
+  let pp_rets fmt rets =
+    let pp_ret fmt ret =
+      let ret = L.unloc ret in
+      Format.fprintf fmt
+        "@[{\"name\": \"%a\", \"kind\" : \"%a\", \"type\": \"%a\"}@]"
+        (pp_var ~debug:false) ret
+        pp_kind ret.v_kind
+        pp_type ret
+    in
+
+    Format.fprintf fmt "@[%a@]"
+    (pp_list ",@ " (pp_ret)) rets
+  in
+
   let pp_func fmt (prog,(fname,f)) =
     if json then 
-      Format.fprintf fmt "@[<v>{@[<v>@ \"name\" : \"%a\",@ \"args\" : [%a]@]@\n}@]"
+      Format.fprintf fmt "@[<v>{@[<v>@ \"name\" : \"%a\",@ \"args\" : [%a],@ \"rets\" : [%a]@]@\n}@]"
         pp_funname fname
         pp_aligned_args (prog.f_args, f)
+        pp_rets prog.f_ret
     else
       Format.fprintf fmt "@[<hv>%a:@ @[<hv>@ argument alignment = [%a]@]@]"
         pp_funname fname
         pp_aligned_args (prog.f_args, f)
-  
   in
   if json then 
     Format.fprintf fmt "@[<v>{@ @[<v>\"functions\": [@[<v>@ %a@ @]]@]@ }@]@."
