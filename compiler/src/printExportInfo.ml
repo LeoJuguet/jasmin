@@ -72,8 +72,8 @@ let pp_type_with_ptr fmt var =
 let pp_export_info_readable fmt export_info =
   let pp_fn_types fmt (args, rets) =
     let pp_type_arg fmt arg =
-      F.fprintf fmt "%a : %a" (pp_var ~debug:false) arg.arg_var pp_type_with_ptr
-        arg.arg_var
+      F.fprintf fmt "@[%a : %a %a@]" (pp_var ~debug:false) arg.arg_var pp_kind
+        arg.arg_var.v_kind (pp_gtype pp_size) arg.arg_var.v_ty
     in
     let pp_ret_typ fmt rets =
       let rets =
@@ -84,11 +84,12 @@ let pp_export_info_readable fmt export_info =
             else Some ret.ret_var)
           rets
       in
+
       if rets <> [] then
         F.fprintf fmt "%a" (pp_list ",@ " pp_type_with_ptr) rets
       else F.fprintf fmt "()"
     in
-    F.fprintf fmt "@[<h>@ %a@ -> %a@]"
+    F.fprintf fmt "@[<hov>@ %a@ -> %a@]"
       (pp_list "@ -> " pp_type_arg)
       args pp_ret_typ rets
   in
