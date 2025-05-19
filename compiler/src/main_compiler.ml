@@ -220,7 +220,7 @@ let main () =
     | Utils0.Ok asm ->
       if !Glob_options.print_export_info || !Glob_options.print_export_info_json then begin
         Format.printf "%a" (fun fmt ->
-          Printer.pp_export_info
+          PrintExportInfo.pp_export_info
             ~json:!Glob_options.print_export_info_json
             fmt
             prog)
