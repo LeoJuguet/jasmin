@@ -223,6 +223,7 @@ let main () =
           PrintExportInfo.pp_export_info
             ~json:!Glob_options.print_export_info_json
             fmt
+            env
             prog)
             asm
       end;
