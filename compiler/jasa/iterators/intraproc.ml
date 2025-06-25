@@ -17,6 +17,9 @@ module JasminFlowDomain = struct
     | S_J_if (cond, stmt_true, stmt_false) ->
         man.exec (mk_if cond stmt_true stmt_false (srange stmt)) flow
         |> OptionExt.return
+    | S_assign ({ekind = E_J_Lnone _ } , _) ->
+      Post.return flow
+      |> OptionExt.return
     | S_assign (x, e) when is_jasmin_type (etyp e) ->
         Debug.debug ~channel:name "assign";
         man.eval e flow >>$? fun e flow ->

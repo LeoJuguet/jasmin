@@ -600,8 +600,39 @@ module Domain = struct
       | _ -> Cases.empty flow |> OptionExt.return
       )
     (* a = b *)
-    | S_assign (({ ekind = E_var _ } as lval), expr)
-      when is_jasmin_array_type @@ etyp lval ->
+    | S_assign (({ ekind = E_var (larr,_) } as lval), ({ ekind = E_var (rarr,_) } as rval))
+      when is_jasmin_array_type @@ etyp lval
+        && is_jasmin_array_type @@ etyp rval
+       ->
+    (
+      match (get_env T_cur man flow) with
+      | Nbt x ->
+        let larr_abs = VarMap.find larr x in
+        let rarr_abs = VarMap.find rarr x in
+        let bounds_assign = 
+          List.map2 (fun lb rb ->
+            mk_assign (mk_var lb range) (mk_var rb range) range
+          ) larr_abs.bounds rarr_abs.bounds
+        in
+        let segments_assign = 
+          List.map2 (fun lb rb ->
+            mk_assign (mk_var lb range) (mk_var rb range) range
+          ) larr_abs.segments rarr_abs.segments 
+        in
+        man.exec (mk_block (List.append bounds_assign segments_assign) range) flow
+        |> OptionExt.return
+      | _ -> Cases.empty flow |> OptionExt.return
+    )
+    | S_assign (({ ekind = E_var (larr,_) } as lval), {ekind = E_constant C_top _})
+      when is_jasmin_array_type @@ etyp lval -> 
+        pp_stmt Format.std_formatter stmt;
+      man.exec (
+        mk_assign lval (mk_expr (E_J_arr_init max_int) range) range
+      ) flow
+      |> OptionExt.return
+    | S_assign (({ ekind = E_var (larr,_) } as lval), _)
+      when is_jasmin_array_type @@ etyp lval -> 
+        pp_stmt Format.std_formatter stmt;
         todo __LOC__
     | S_assign ({ ekind = E_J_Laset (access, wsize, var, index) }, expr) ->(
         man.eval expr flow >>$? fun e flow ->

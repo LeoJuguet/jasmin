@@ -10,6 +10,7 @@
 					,"jasmin.iterators.loop"
 					,"jasmin.iterators.intraproc"
 					,"jasmin.iterators.interproc"
+					,"jasmin.iterators.interproc_assembly"
 					,"jasmin.integer.init"
 					,"stubs.iterators.body"
 
