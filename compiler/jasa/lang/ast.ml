@@ -9,21 +9,6 @@ module Arch =
        in
        (module Arch_full.Arch_from_Core_arch (C) : Arch_full.Arch))
 
-let load_file name =
-  let open Pretyping in
-  try
-    name
-    |> tt_file Arch.arch_info Env.empty None None
-    |> fst |> Env.decls
-    |> Compile.preprocess Arch.reg_size Arch.asmOp
-  with
-  | TyError (loc, e) ->
-      Format.eprintf "%a: %a@." Location.pp_loc loc pp_tyerror e;
-      assert false
-  | Syntax.ParseError (loc, None) ->
-      Format.eprintf "Parse error: %a@." Location.pp_loc loc;
-      assert false
-
 (* ======================================================================  *)
 (*                             MOPSA defs                                  *)
 (* ======================================================================  *)
@@ -107,7 +92,7 @@ type expr_kind +=
   | E_J_sub of Warray_.arr_access * Wsize.wsize * int * var * expr
   | E_J_load of Wsize.wsize * var * expr
   | E_J_app1 of Jasmin.Expr.sop1 * expr
-  | E_J_appN of Jasmin.Expr.opN * expr list
+  | E_J_appN of Jasmin.Expr.opNA * expr list
   | E_J_if of typ * expr * expr * expr
   | E_J_Lnone of typ
   | E_J_Lvar of var
@@ -225,6 +210,14 @@ type stmt_kind +=
   | S_J_opn of
       expr list (** lvals *)
       * Jasmin.Expr.assgn_tag (* 'asm Sopn.sopn *)
+      *
+
+    (Arch.reg, Arch.regx, Arch.xreg, Arch.rflag, Arch.cond, Arch.asm_op,
+      Arch.extra_op
+    )
+
+
+       Arch_extra.extended_op Sopn.sopn
       * expr list
   | S_J_syscall of
       expr list (** lvals *) * BinNums.positive Syscall_t.syscall_t * expr list
@@ -256,7 +249,7 @@ let () =
           | S_J_assgn (lval, assgn_tag, typ, expr) ->
               fprintf fmt "@[assign(%a, %a , %a)@]" pp_typ typ pp_expr lval
                 pp_expr expr
-          | S_J_opn (lvals, assgn_tag, exprs) ->
+          | S_J_opn (lvals, assgn_tag, opn, exprs) ->
               fprintf fmt "@[opn_statement(@[%a@], @[%a@])@]"
                 (Jasmin.Utils.pp_list ", " pp_expr)
                 lvals
@@ -486,44 +479,35 @@ let rec jasmin_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ]) ?(
              jasmin_to_mopsa_expr ~translate_info ~range expr_true,
              jasmin_to_mopsa_expr ~translate_info ~range expr_false ))
         range
-  | Pabstract (pred, args) -> (
-    let open Stubs.Ast in
-    match pred.name, args with
-    | "init_array", [pos;i1;i2] when List.length args == 3 ->
-      mk_expr (
-        E_stub_J_abstract (Init_array,
-        [
-          mk_var (sub_pos_to_var pos translate_info.args) range;
-          jasmin_to_mopsa_expr ~translate_info ~range i1;
-          jasmin_to_mopsa_expr ~translate_info ~range i2
-        ]
-        )
-      ) range
-    | "assigns_array", [pos; i1;i2] when List.length args == 3 ->
-      mk_expr (
-        E_stub_J_abstract (Init_array,
-          [
-            mk_stub_primed (mk_var (sub_pos_to_var pos translate_info.return_var) range) range;
-            jasmin_to_mopsa_expr ~translate_info ~range i1;
-            jasmin_to_mopsa_expr ~translate_info ~range i2
-          ]
-        )
-      ) range
-    | pred_name,_ -> 
-      warn_at range "abstract %s is not yet supported" pred_name;
-      mk_true range
-      )
-  | Pfvar _ -> 
-    warn_at range "expr Pfvar not yet supported";
-    mk_true range
+  (* | Pabstract (pred, args) -> ( *)
+    (* let open Stubs.Ast in *)
+    (* match pred.name, args with *)
+    (* | "init_array", [pos;i1;i2] when List.length args == 3 -> *)
+      (* mk_expr ( *)
+        (* E_stub_J_abstract (Init_array, *)
+        (* [ *)
+          (* mk_var (sub_pos_to_var pos translate_info.args) range; *)
+          (* jasmin_to_mopsa_expr ~translate_info ~range i1; *)
+          (* jasmin_to_mopsa_expr ~translate_info ~range i2 *)
+        (* ] *)
+        (* ) *)
+      (* ) range *)
+    (* | "assigns_array", [pos; i1;i2] when List.length args == 3 -> *)
+      (* mk_expr ( *)
+        (* E_stub_J_abstract (Init_array, *)
+          (* [ *)
+            (* mk_stub_primed (mk_var (sub_pos_to_var pos translate_info.return_var) range) range; *)
+            (* jasmin_to_mopsa_expr ~translate_info ~range i1; *)
+            (* jasmin_to_mopsa_expr ~translate_info ~range i2 *)
+          (* ] *)
+        (* ) *)
+      (* ) range *)
+    (* | pred_name,_ -> *) 
+      (* warn_at range "abstract %s is not yet supported" pred_name; *)
+      (* mk_true range *)
+      (* ) *)
   | Pbig _ -> 
     warn_at range "expr Pbig not yet supported";
-    mk_true range
-  | Presult _ -> 
-    warn_at range "expr Presult not yet supported";
-    mk_true range
-  | Presultget _ -> 
-    warn_at range "expr Presultget not yet supported";
     mk_true range
   | _ -> failwith "expr not yet supported"
 
@@ -572,7 +556,7 @@ let jasmin_to_mopsa_loc location =
     (mk_pos location.loc_fname end_line end_col)
 
 (** Translate jasmin instruction to MOPSA  stmt (instr in Jasmin is the equivalent of stmt in MOPSA)*)
-let rec jasmin_to_mopsa_stmt ?(translate_info = {args = []; return_var = []}) instr  =
+let rec jasmin_to_mopsa_stmt ?(translate_info = {args = []; return_var = []}) instr =
   let open Prog in
   let open Universal.Ast in
   let range = jasmin_to_mopsa_loc instr.i_loc.base_loc in
@@ -606,6 +590,7 @@ let rec jasmin_to_mopsa_stmt ?(translate_info = {args = []; return_var = []}) in
         (S_J_opn
            ( List.map (jasmin_lval_to_mopsa_expr ~range) lvals,
              assgn_tag,
+             opn,
              List.map (jasmin_to_mopsa_expr ~translate_info ~range) exprs ))
         range
   | Csyscall (lvals, syscall, exprs) ->
@@ -649,21 +634,33 @@ let declare_args ?(range = mk_program_range ["dummy range"]) args =
 
 
 let jasmin_stub_to_universal fname vars stub return range translate_info =
-  let open Prog in
-  let open Stubs.Ast in
-  let pre = stub.f_pre in
-  let post = stub.f_post in
-  let pre = List.map (fun e -> S_leaf (S_requires (with_range (with_range (F_expr (jasmin_to_mopsa_expr ~translate_info ~range (snd e))) range ) range ))) pre in
-  let post = List.map (fun e -> S_leaf (S_ensures (with_range (with_range (F_expr (jasmin_to_mopsa_expr ~translate_info ~range (snd e))) range ) range))) post in
-  {
-    stub_func_name = fname;
-    stub_func_body = pre @ post;
-    stub_func_params = vars;
-    stub_func_locals = [];
-    stub_func_assigns = [];
-    stub_func_return_type = return;
-    stub_func_range = range
-  }
+  match stub with
+  | Some stub ->
+    let open Prog in
+    let open Stubs.Ast in
+    let pre = stub.f_pre in
+    let post = stub.f_post in
+    let pre = List.map (fun e -> S_leaf (S_requires (with_range (with_range (F_expr (jasmin_to_mopsa_expr ~translate_info ~range (snd e))) range ) range ))) pre in
+    let post = List.map (fun e -> S_leaf (S_ensures (with_range (with_range (F_expr (jasmin_to_mopsa_expr ~translate_info ~range (snd e))) range ) range))) post in
+    {
+      stub_func_name = fname;
+      stub_func_body = pre @ post;
+      stub_func_params = vars;
+      stub_func_locals = [];
+      stub_func_assigns = [];
+      stub_func_return_type = return;
+      stub_func_range = range
+    }
+  | None -> 
+    {
+      stub_func_name = fname;
+      stub_func_body = [];
+      stub_func_params = vars;
+      stub_func_locals = [];
+      stub_func_assigns = [];
+      stub_func_return_type = return;
+      stub_func_range = range
+    }
 
 
 let jasmin_to_mopsa_func func =

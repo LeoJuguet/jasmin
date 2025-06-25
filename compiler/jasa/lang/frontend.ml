@@ -1,13 +1,13 @@
 open Jasmin
 open Ast
 
-module Arch =
-  (val let use_set0 = true and use_lea = true in
-       let call_conv = Glob_options.Linux in
-       let module C : Arch_full.Core_arch =
-         (val CoreArchFactory.core_arch_x86 ~use_lea ~use_set0 call_conv)
-       in
-       (module Arch_full.Arch_from_Core_arch (C) : Arch_full.Arch))
+module Arch = Ast.Arch
+  (* (val let use_set0 = true and use_lea = true in *)
+       (* let call_conv = Glob_options.Linux in *)
+       (* let module C : Arch_full.Core_arch = *)
+         (* (val CoreArchFactory.core_arch_x86 ~use_lea ~use_set0 call_conv) *)
+       (* in *)
+       (* (module Arch_full.Arch_from_Core_arch (C) : Arch_full.Arch)) *)
 
 let load_file name =
   let open Pretyping in
@@ -26,7 +26,6 @@ let load_file name =
 
 open Mopsa
 open Universal
-open Ast
 
 let opt_functions = ref []
 
@@ -124,7 +123,7 @@ module EntryDomainJasmin = struct
                             v with
                             vtyp =
                               (match vtyp v with
-                              | T_J_U _ | T_J_Int -> T_int
+                              | T_J_U _ | T_J_Int -> Ast.T_int
                               | a -> a);
                           }
                           range)
@@ -138,7 +137,7 @@ module EntryDomainJasmin = struct
                  locals_vars;
                let requires = get_requires_in_assumes prog in
                let new_block =
-                 mk_block (add_vars @ requires @ [ body ]) range
+                 Ast.mk_block (add_vars @ requires @ [ body ]) range
                in
                man.exec new_block flow |> post_to_flow man |> Flow.remove T_cur)
              prog.functions)
