@@ -2,4 +2,4 @@
 
 filename=$(basename $1)
 
-./jasa.exe -config config_jazz.json $@ -hook logs -debug _ | tee "output_${filename%.*}"
+./jasa.exe -config config_dev.json $@ -hook logs -debug _ | tee "output_${filename%.*}"

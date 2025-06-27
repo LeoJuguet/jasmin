@@ -9,7 +9,7 @@ module Domain = struct
   end)
 
   let checks = []
-  let init prog man flow = flow
+  let init prog man flow = None
 
   let exec stmt man flow =
     match skind stmt with

@@ -23,7 +23,7 @@ module Init = struct
   let maybe = Nb MAYBE
   let not_init = Nb NOT_INIT
   let print fmt t = unformat pp_init ~path:[ Key "init" ] fmt t
-  let top = Nb NOT_INIT
+  let top = Nb MAYBE
   let bottom = BOT
   let is_bottom t = match t with BOT -> true | _ -> false
 
@@ -262,7 +262,7 @@ module Domain = struct
 
   module V = MakeValue (Simplified_Value)
 
-  let init prog man flow = flow
+  let init prog man flow = None
 
   let check_is_init expr e ?(is_warning = false) (man : ('a, unit) man) flow =
     let aval = mk_avalue_query e V_jasmin_scalar_initialized in

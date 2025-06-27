@@ -35,7 +35,7 @@ let () =
       key = "-jazz-slice";
       category = "Jasmin";
       doc = " select functions to check";
-      spec = ArgExt.Set_string_list opt_functions;
+      spec = ArgExt.String (ArgExt.set_string_list_lifter opt_functions, ArgExt.empty);
       default = "all";
     }
 
@@ -74,7 +74,9 @@ module EntryDomainJasmin = struct
     | Jasmin_Program jprog ->
         Debug.debug ~channel:name "init jasmin program\n";
         set_jasmin_program jprog flow |> set_target_info (module Arch)
-    | _ -> flow
+        |> Post.return
+        |> OptionExt.return
+    | _ -> None
 
   (* Get requires and transform them *)
   let get_requires stub =
@@ -150,4 +152,8 @@ module EntryDomainJasmin = struct
 end
 
 let () = register_stateless_domain (module EntryDomainJasmin)
-let () = register_frontend { lang = "Jasmin"; parse = jasmin_parser }
+let () = register_frontend {
+  lang = "Jasmin";
+  parse = jasmin_parser;
+  on_panic = fun _ _ _ -> ();
+}

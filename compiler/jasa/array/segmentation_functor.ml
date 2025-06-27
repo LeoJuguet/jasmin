@@ -608,6 +608,9 @@ module Domain = struct
 
     let init prog man flow =
       set_env T_cur Arrays.empty man flow
+      >>%? fun flow ->
+      Post.return flow
+      |> OptionExt.return
 
     (** Unificator *)
     (** A really important algorithm to be able to do classic operation after *)
@@ -857,20 +860,20 @@ module Domain = struct
         Debug.debug ~channel:name "add %a" pp_var v;
         ArraySegment.add_arr v (etyp expr) (srange stmt) man flow >>$? fun arr flow ->
         map_env T_cur (Arrays.add v arr) man flow 
-        |> Post.return
         |> OptionExt.return
       | S_remove({ekind = E_var(v,mode)} as expr) when is_jasmin_array_type @@ etyp expr ->
-        let arrays = get_env T_cur man flow in
+        get_env T_cur man flow
+        >>$? fun arrays flow ->
         set_env T_cur (Arrays.remove v arrays) man flow
-        |> Post.return
         |> OptionExt.return
       | S_assign({ekind = E_var(arr,_) as lval}, {ekind = E_J_arr_init(len)}) ->
-        let arr_abs = Arrays.find arr (get_env T_cur man flow) in
+        get_env T_cur man flow
+        >>$? fun envs flow ->
+        let arr_abs = Arrays.find arr envs in
         let rec iter bounds segments flow = match bounds, segments with
         | (b1,p1)::(b2,p2)::[], [s] ->
           man.exec (mk_forget (mk_var s range) range) flow >>%? fun flow ->
           map_env T_cur (Arrays.add arr {bounds = bounds; segments = segments}) man flow
-          |> Post.return
           |> OptionExt.return
         | bound::(b2,p2)::qbounds, s::seg::qseg ->
           man.exec (mk_forget (mk_var seg range) range) flow >>%? fun flow ->
@@ -884,44 +887,52 @@ module Domain = struct
       | S_assign({ekind = E_J_Laset(access,wsize,var,index)}, expr) -> 
         man.eval expr flow >>$? fun e flow ->
         let range = srange stmt in
-        if is_bottom (get_env T_cur man flow) then Cases.empty flow |> OptionExt.return 
+        get_env T_cur man flow
+        >>$? fun envs flow ->
+        if is_bottom envs then Cases.empty flow |> OptionExt.return 
         else
-        let arr = Arrays.find var (get_env T_cur man flow) in
+        let arr = Arrays.find var envs in
         ArraySegment.set var arr index e ~range man flow >>$? fun arr_val flow ->
         map_env T_cur (Arrays.add var {bounds = fst arr_val; segments = snd arr_val}) man flow
-        |> Post.return
         |> OptionExt.return
 
       | S_assume({ekind = E_stub_J_abstract(Init_array,[{ekind = E_var(arr,_)};pos;len])}) ->
         let range = srange stmt in
-        let arr_abs = Arrays.find arr (get_env T_cur man flow) in
+        get_env T_cur man flow
+        >>$? fun envs flow ->
+        let arr_abs = Arrays.find arr envs in
         ArraySegment.set arr arr_abs pos ~len (mk_constant ~etyp:T_int (Integer.Initialized.(C_init Init.INIT)) range) ~range man flow >>$? 
         fun arr_val flow ->
         map_env T_cur (Arrays.add arr {bounds = fst arr_val; segments = snd arr_val}) man flow
-        |> Post.return
         |> OptionExt.return
       | _ -> None
 
     let eval expr man flow = match ekind expr with
     | E_J_get(arr_access,wsize,var,index) ->
         let range = erange expr in
-        if is_bottom (get_env T_cur man flow) then Cases.empty flow |> OptionExt.return 
+        get_env T_cur man flow
+        >>$? fun envs flow ->
+        if is_bottom envs then Cases.empty flow |> OptionExt.return 
         else
-        let arr = Arrays.find var (get_env T_cur man flow) in
+        let arr = Arrays.find var envs in
         ArraySegment.sanitize arr ~range man flow >>$? fun arr_out flow ->
         map_env T_cur (Arrays.add var arr_out) man flow
-        |> ArraySegment.get arr_out index ~range man
+        >>%? fun flow ->
+        ArraySegment.get arr_out index ~range man flow
         |> OptionExt.return
     | E_stub_J_abstract(Init_array,[{ekind = E_var(arr,_)};pos;len])  ->
       (* Cases.return (mk_false (erange expr)) flow *)
       (* |> OptionExt.return *)
 
         let range = erange expr in
-        let arr_abs = Arrays.find arr (get_env T_cur man flow) in
+        get_env T_cur man flow
+        >>$? fun envs flow ->
+        let arr_abs = Arrays.find arr envs in
         ArraySegment.set arr arr_abs pos ~len (mk_constant ~etyp:T_int (Integer.Initialized.(C_init Init.INIT)) range) ~range man flow >>$? 
         fun arr_val flow ->
         map_env T_cur (Arrays.add arr {bounds = fst arr_val; segments = snd arr_val}) man flow
-        |> Cases.return (mk_true range)
+        >>%? fun flow ->
+        Cases.return (mk_true range) flow
         |> OptionExt.return
     | _ -> None
 

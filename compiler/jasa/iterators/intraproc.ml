@@ -9,7 +9,7 @@ module JasminFlowDomain = struct
   end)
 
   let checks = []
-  let init prog man flow = flow
+  let init prog man flow = None
 
   let exec stmt man flow =
     let open Universal.Ast in
@@ -25,6 +25,18 @@ module JasminFlowDomain = struct
         man.eval e flow >>$? fun e flow ->
         man.exec (mk_assign x e stmt.srange) flow ~route:(Below name)
         |> OptionExt.return
+    | S_J_opn (lvars,_,_,exprs) -> 
+      let range = srange stmt in
+      man.exec (mk_block (
+        List.filter_map (fun e -> 
+        match ekind e with
+        | E_J_Lnone _ ->
+          None
+        | _ ->
+          Some (mk_assign e (mk_top (etyp e) range) range)
+        )
+      lvars) range) flow
+    |> OptionExt.return
     | _ -> None
 
   let eval expr man flow = match ekind expr with _ -> None

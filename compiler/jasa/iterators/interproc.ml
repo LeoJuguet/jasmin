@@ -10,7 +10,7 @@ module Domain = struct
   end)
 
   let checks = []
-  let init prog man flow = flow
+  let init prog man flow = None
 
   let exec stmt man flow =
     let range = srange stmt in
@@ -37,6 +37,7 @@ module Domain = struct
             match result with
             | TOP ->
                 Debug.debug "TOP TOP";
+                let flow_report = Flow.get_report flow in
                 let block =
                   List.map
                     (fun expr ->
@@ -52,7 +53,10 @@ module Domain = struct
                     lvars
                 in
                 let block = mk_block (List.concat block) range in
-                man.exec block flow |> OptionExt.return
+                man.exec block flow >>%? fun flow ->  
+                Flow.set_report flow_report flow
+                |> Post.return
+                |> OptionExt.return
             | BOT ->
                 Debug.debug "BOT BOT";
                 None

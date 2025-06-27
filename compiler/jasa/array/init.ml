@@ -66,7 +66,7 @@ module Domain = struct
     mk_attr_var ~mode s "no_init_range" T_int
 
   let checks = [ CHK_J_NOT_INIT_ARRAY ]
-  let init prog man flow = flow
+  let init prog man flow = None
 
   let eval expr man flow =
     let range = erange expr in

@@ -40,8 +40,8 @@ all:
 
 jasa:
 	$(RM) jasa.exe
-	dune build @check jasa
-	ln -sf "_build/default/jasa/jasa.exe" jasa.exe
+	dune build @check jasa/jasa.bc
+	ln -sf "_build/default/jasa/jasa.bc" jasa.exe
 
 CIL:
 	$(RM) -f src/CIL/*.ml src/CIL/*.mli ../proofs/extraction.vo

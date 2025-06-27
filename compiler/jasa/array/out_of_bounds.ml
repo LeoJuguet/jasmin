@@ -108,7 +108,7 @@ module Domain = struct
 
   let init prog man flow =
     (* set_env T_cur () man flow *)
-    flow
+    None
 
   let exec_assign_array lval expr range man flow =
     match ekind lval with

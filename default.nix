@@ -75,7 +75,7 @@ if !lib.versionAtLeast oP.ocaml.version "4.11"
 then throw "Jasmin requires OCaml ≥ 4.11"
 else
 
-let mopsa = callPackage scripts/mopsa.nix { ocamlPackages = oP; }; in
+# let mopsa = callPackage scripts/mopsa.nix { ocamlPackages = oP; }; in
 
 let ecDeps = ecRef != ""; in
 
@@ -96,7 +96,7 @@ stdenv.mkDerivation {
          angstrom
          batteries
          menhir (oP.menhirLib or null) zarith camlidl apron yojson 
-	 mopsa libffi
+	       mopsa libffi arg-complete
 	]))
     ++ optionals devTools (with oP; [ merlin ocaml-lsp ])
     ++ optionals ecDeps [ easycrypt z3.out ]

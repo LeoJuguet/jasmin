@@ -14,13 +14,19 @@ module Domain = struct
   end)
 
   let checks = []
-  let init _ _ flow = flow
+  let init _ _ flow = None
 
   let declare_var v range man flow =
+    if vtyp v = T_bool then
+      man.exec (mk_assign (mk_var v range) (mk_top (vtyp v) range) range) flow
+    else
     let new_var = mk_var { v with vtyp = T_int } range in
+    let flow_report = Flow.get_report flow in
     let l, h = Utils.range_of v.vtyp in
     Eval.singleton (mk_z_interval l h range) flow >>$ fun init flow ->
     man.exec (mk_assign new_var init range) flow
+    >>% fun flow ->
+    Post.return (Flow.set_report flow_report flow)
 
   let exec stmt man flow =
     match skind stmt with

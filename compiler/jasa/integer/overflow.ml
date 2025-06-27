@@ -87,7 +87,7 @@ module Domain = struct
 
   let universal = "Universal"
   let checks = [ CHK_J_OVERFLOW ]
-  let init _ _ flow = flow
+  let init _ _ flow = None
 
   let jazz2num jexp =
     let parts, builder = structure_of_expr jexp in

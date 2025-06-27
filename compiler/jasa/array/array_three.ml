@@ -119,6 +119,45 @@ module ArraySegment = struct
   let mk_convex_join expr1 expr2 range =
     mk_binop ~etyp:T_int expr1 O_convex_join expr2 range
 
+
+  let set2 va a index value ?(len = mk_one dummy_range) ?(range = dummy_range) man flow =
+    let index_up = mk_binop index O_plus len range in
+    match (a.bounds, a.segments) with
+    | [zero; b1; b2; bound], [s1;s2;s3] ->
+      switch 
+      [
+        (* Check out of bounds *)
+        (
+          [
+            mk_le index (mk_var zero range) range;
+          ],
+          (
+            fun flow -> 
+            let callstack = Flow.get_callstack flow in 
+            let alarm = mk_alarm (A_J_out_of_bounds_array (mk_var va range,index)) callstack range in
+            Flow.raise_alarm alarm man.lattice flow 
+            |> Post.return
+          )
+        );
+        
+        (
+          [
+            mk_le (mk_var bound range) index_up range;
+          ],
+          (
+            fun flow -> 
+            let callstack = Flow.get_callstack flow in 
+            let alarm = mk_alarm (A_J_out_of_bounds_array (mk_var va range,index)) callstack range in
+            Flow.raise_alarm alarm man.lattice flow 
+            |> Post.return
+          )
+        );
+      ] 
+      man flow
+    | _ ->
+      panic_not_well_formed __LOC__
+
+  
   (* Assignment to an array element *)
   let set va a index value ?(len = mk_one dummy_range) ?(range = dummy_range)
       man flow =
@@ -398,6 +437,7 @@ module ArraySegment = struct
                         | Finite x -> mk_z x range
                         | _ -> mk_var bounds range in
                     man.exec (mk_assign (mk_var s2 range) (mk_convex_join (mk_var s2 range) value range) range) flow
+                    >>% man.exec (mk_assign (mk_var s2 range) (mk_convex_join (mk_var s2 range) (mk_var s3 range) range) range)
                     >>% man.exec (mk_assign (mk_var b2 range) up range)
                     | _ -> assert false
                   )
@@ -409,19 +449,38 @@ module ArraySegment = struct
                 >>% 
                 assume (mk_le index_up (mk_var b2 range) range)
                   ~fthen:(fun flow ->
+                  (* i + len <= b2 *)
                     todo __LOC__
                   )
                   ~felse:(fun flow ->
+                    (* i + len > b2 *)
                     todo __LOC__
                   )
                   ~fboth:(fun _ _ ->
+                    (* i + len <= b2 && i + len > b2 *)
                     todo __LOC__
                   )
                 man
               )
               ~fboth:(fun _ _ ->
                 (* b1 <= i && b1 >= i *)
-                todo __LOC__
+                assume (mk_le index_up (mk_var b2 range) range)
+                  ~fthen:(fun flow ->
+                    man.exec (
+                      mk_block [
+                        mk_assign (mk_var b1 range) index_up range;
+                        mk_assign (mk_var b1 range) (mk_convex_join (mk_var b1 range) value range) range;
+                      ] range
+                    ) flow
+                  )
+                  ~felse:(fun flow -> 
+                    todo __LOC__
+                  )
+                  ~fboth:(fun _ _ ->
+                    todo __LOC__
+                  )
+                  man flow
+
               )
               man flow
           )
@@ -436,7 +495,7 @@ module ArraySegment = struct
         man flow
     | _ -> panic_not_well_formed __LOC__
 
-  let get arr index ?(len = mk_one dummy_range) ?(range = dummy_range) man flow
+  let get va arr index ?(len = mk_one dummy_range) ?(range = dummy_range) man flow
       =
     let index_plus = mk_binop index O_plus len range in
     let rec start_region bounds segments flow =
@@ -445,31 +504,39 @@ module ArraySegment = struct
           assume
             (mk_lt index (mk_var b2 range) range)
             ~fthen:(fun flow ->
-              end_region (b2 :: qbounds) segments flow >>$ fun out flow ->
-              Cases.return (mk_convex_join (mk_var s range) out range) flow)
+              end_region (b2 :: qbounds) segments flow |>
+              Cases.join (Cases.return (mk_var s range) flow)
+              )
             ~felse:(fun flow -> start_region (b2 :: qbounds) seg flow)
             ~fboth:(fun _ _ ->
-              end_region (b2 :: qbounds) seg flow >>$ fun out flow ->
-              Cases.return (mk_convex_join (mk_var s range) out range) flow)
+              end_region (b2 :: qbounds) seg flow |>
+              Cases.join (Cases.return (mk_var s range) flow)
+              )
             man flow
       | _ -> todo __LOC__
-    and end_region bounds segments flow =
+    and end_region bounds segments flow : ('a,expr) cases =
       match (bounds, segments) with
       | b1 :: qbounds, s :: seg ->
           assume
             (mk_le index_plus (mk_var b1 range) range) (* i + len  <= b*)
             ~fthen:(fun flow -> Cases.return (mk_var s range) flow)
             ~felse:(fun flow ->
-              end_region qbounds seg flow >>$ fun expr flow ->
-              Cases.return (mk_convex_join expr (mk_var s range) range) flow)
+              end_region qbounds seg flow |>
+              Cases.join (Cases.return (mk_var s range) flow)
+              )
             ~fboth:(fun _ flow ->
-              end_region qbounds seg flow >>$ fun expr flow ->
-              Cases.return (mk_convex_join expr (mk_var s range) range) flow)
+              Cases.join (end_region qbounds seg flow ) (Cases.return (mk_var s range) flow)
+              )
             man flow
-      | _ -> todo __LOC__
+      | _ -> 
+          debug "end_region get warning out of bounds";
+          let callstack = Flow.get_callstack flow in 
+          let alarm = mk_alarm (A_J_out_of_bounds_array (mk_var va range,index)) callstack range in
+          Flow.raise_alarm alarm man.lattice flow 
+          |> Cases.empty
     in
-    start_region arr.bounds arr.segments flow >>$ fun out flow ->
-    man.eval out flow
+    start_region arr.bounds arr.segments flow (*>>$ fun out flow ->
+    man.eval out flow *)
 
   let add_arr var typ range man flow =
     match typ with
@@ -526,7 +593,9 @@ module Domain = struct
   let bottom = BOT
   let top = TOP
   let is_bottom b = b = bottom 
-  let init prog man flow = set_env T_cur (Nbt VarMap.empty) man flow
+  let init prog man flow =
+    set_env T_cur (Nbt VarMap.empty) man flow
+    |> OptionExt.return
 
   (* Unificator *)
   (* A really important algorithm to be able to do classic operation after *)
@@ -569,18 +638,23 @@ module Domain = struct
     | S_add ({ ekind = E_var (v, mode) } as expr)
       when is_jasmin_array_type @@ etyp expr ->
         Debug.debug ~channel:name "add %a" pp_var v;
+        let flow_report = Flow.get_report flow in
         ArraySegment.add_arr v (etyp expr) (srange stmt) man flow
         >>$? fun arr flow ->
+        Flow.set_report flow_report flow |> fun flow ->
         map_env T_cur (add_var v arr) man flow
-        |> Post.return |> OptionExt.return
+        |> OptionExt.return
     | S_remove ({ ekind = E_var (v, mode) } as expr)
       when is_jasmin_array_type @@ etyp expr ->
-        let arrays = get_env T_cur man flow in
+        get_env T_cur man flow
+        >>$? fun arrays flow ->
         set_env T_cur (remove_var v arrays) man flow
-        |> Post.return |> OptionExt.return
+        |> OptionExt.return
     | S_assign ({ ekind = E_var (arr, _) }, { ekind = E_J_arr_init len })
       ->(
-        match (get_env T_cur man flow) with
+        get_env T_cur man flow
+        >>$? fun envs flow ->
+        match envs with
         | Nbt x -> let arr_abs = VarMap.find arr x 
         in
         let rec iter bounds segments flow =
@@ -588,7 +662,7 @@ module Domain = struct
           | [ b1; b2 ], [ s ] ->
               man.exec (mk_forget (mk_var s range) range) flow >>%? fun flow ->
               map_env T_cur (add_var arr ArraySegment.{ bounds; segments }) man flow
-              |> Post.return |> OptionExt.return
+              |> OptionExt.return
           | bound :: b2 :: qbounds, s :: seg :: qseg ->
               man.exec (mk_forget (mk_var seg range) range) flow
               >>%? fun flow ->
@@ -600,47 +674,50 @@ module Domain = struct
       | _ -> Cases.empty flow |> OptionExt.return
       )
     (* a = b *)
-    | S_assign (({ ekind = E_var (larr,_) } as lval), ({ ekind = E_var (rarr,_) } as rval))
-      when is_jasmin_array_type @@ etyp lval
-        && is_jasmin_array_type @@ etyp rval
-       ->
-    (
-      match (get_env T_cur man flow) with
-      | Nbt x ->
-        let larr_abs = VarMap.find larr x in
-        let rarr_abs = VarMap.find rarr x in
-        let bounds_assign = 
-          List.map2 (fun lb rb ->
-            mk_assign (mk_var lb range) (mk_var rb range) range
-          ) larr_abs.bounds rarr_abs.bounds
-        in
-        let segments_assign = 
-          List.map2 (fun lb rb ->
-            mk_assign (mk_var lb range) (mk_var rb range) range
-          ) larr_abs.segments rarr_abs.segments 
-        in
-        man.exec (mk_block (List.append bounds_assign segments_assign) range) flow
-        |> OptionExt.return
-      | _ -> Cases.empty flow |> OptionExt.return
-    )
-    | S_assign (({ ekind = E_var (larr,_) } as lval), {ekind = E_constant C_top _})
-      when is_jasmin_array_type @@ etyp lval -> 
-        pp_stmt Format.std_formatter stmt;
-      man.exec (
-        mk_assign lval (mk_expr (E_J_arr_init max_int) range) range
-      ) flow
-      |> OptionExt.return
-    | S_assign (({ ekind = E_var (larr,_) } as lval), _)
-      when is_jasmin_array_type @@ etyp lval -> 
-        pp_stmt Format.std_formatter stmt;
-        todo __LOC__
+    | S_assign (({ ekind = E_var(arr,_) } as lval), ({ ekind = E_var(e1,_)} as expr))
+      when is_jasmin_array_type @@ etyp lval && compare_typ (etyp lval) (etyp expr) = 0 ->
+      (
+        let range = srange stmt in
+        get_env T_cur man flow
+        >>$? fun envs flow ->
+        if is_bottom envs then
+          Cases.empty flow |> OptionExt.return
+        else
+          match envs with
+          | Nbt arrays -> 
+          let arr_repr = VarMap.find arr arrays in
+          let e1_repr = VarMap.find e1 arrays in (
+          match arr_repr, e1_repr with
+          | {
+            bounds = [arr_zero; arr_b1; arr_b2; arr_bound];
+            segments = [ arr_s1; arr_s2; arr_s3];
+          }, {
+            bounds = [e1_zero; e1_b1; e1_b2; e1_bound];
+            segments = [ e1_s1; e1_s2; e1_s3];
+          } ->
+          man.exec (mk_block 
+            [
+              mk_assign (mk_var arr_b1 range) (mk_var e1_b1 range) range;
+              mk_assign (mk_var arr_b2 range) (mk_var e1_b2 range) range;
+              mk_assign (mk_var arr_s1 range) (mk_var e1_s1 range) range;
+              mk_assign (mk_var arr_s2 range) (mk_var e1_s2 range) range;
+              mk_assign (mk_var arr_s3 range) (mk_var e1_s3 range) range;
+            ]
+            range
+          ) flow |> OptionExt.return
+          | _ -> ArraySegment.panic_not_well_formed __LOC__
+          )
+          | _ -> Cases.empty flow |> OptionExt.return
+          )
     | S_assign ({ ekind = E_J_Laset (access, wsize, var, index) }, expr) ->(
         man.eval expr flow >>$? fun e flow ->
         let range = srange stmt in
-        if is_bottom (get_env T_cur man flow) then
+        get_env T_cur man flow
+        >>$? fun envs flow ->
+        if is_bottom envs then
           Cases.empty flow |> OptionExt.return
         else
-          match (get_env T_cur man flow) with
+          match envs with
           | Nbt arrays -> 
           let arr = VarMap.find var arrays in
           ArraySegment.set var arr index e ~range man flow >>%? fun flow ->
@@ -654,7 +731,9 @@ module Domain = struct
               (Init_array, [ { ekind = E_var (arr, _) }; pos; len ]);
         } ->(
         let range = srange stmt in
-        match (get_env T_cur man flow) with 
+        get_env T_cur man flow
+        >>$? fun envs flow ->
+        match envs with 
         | Nbt arrays -> let arr_abs = VarMap.find arr arrays in
         ArraySegment.set arr arr_abs pos ~len
           (mk_constant ~etyp:T_int Integer.Initialized.(C_init Init.INIT) range)
@@ -668,23 +747,41 @@ module Domain = struct
     match ekind expr with
     | E_J_get (arr_access, wsize, var, index) -> (
         let range = erange expr in
-        if is_bottom (get_env T_cur man flow) then
+        get_env T_cur man flow
+        >>$? fun envs flow ->
+        if is_bottom envs then
           Cases.empty flow |> OptionExt.return
         else
-          match (get_env T_cur man flow) with
+          match envs with
           | Nbt arrays -> let arr = VarMap.find var arrays  in
-          ArraySegment.get arr index ~range man flow |> OptionExt.return
+          ArraySegment.get var arr index ~range man flow |> OptionExt.return
           | _ -> Cases.empty flow |> OptionExt.return
           )
     | E_stub_J_abstract (Init_array, [ { ekind = E_var (arr, _) }; pos; len ])
       ->(
-      match (get_env T_cur man flow) with
+        get_env T_cur man flow
+        >>$? fun envs flow ->
+      match envs with
       | Nbt arrays ->
         let range = erange expr in
         let arr_abs = VarMap.find arr arrays in
         ArraySegment.set arr arr_abs pos ~len
           (mk_constant ~etyp:T_int Integer.Initialized.(C_init Init.INIT) range)
           ~range man flow
+        >>%? fun flow ->
+        (* FIX it's a fix for the demo but a better fix is required*)
+        (match arr_abs.segments with
+          | [s1;s2;s3] ->
+            let tmp = (mk_constant ~etyp:T_int Integer.Initialized.(C_init Init.INIT) range)
+            in
+              man.exec (mk_assign (mk_var s1 range) tmp range) flow
+          >>% 
+            man.exec (mk_assign (mk_var s2 range) tmp range)
+          >>% 
+            man.exec (mk_assign (mk_var s3 range) tmp range)
+          | _ -> 
+          todo __LOC__
+        )
         >>%? fun flow ->
         flow |> Cases.return (mk_true range) |> OptionExt.return
       | _ -> Cases.empty flow |> OptionExt.return
@@ -703,7 +800,7 @@ module Domain = struct
 
   let print_state printer a =
     let path = [Key "array3"] in
-     unformat ~path (bot_top_fprint (VarMap.fprint MapExt.printer_default pp_var ArraySegment.fprint_array_segments)) printer a
+     unformat ~path (bot_top_fprint (VarMap.fprint MapExt.{printer_default with print_sep = ", \n" } pp_var ArraySegment.fprint_array_segments)) printer a
     
   let print_expr man flow printer exp = ()
 end
