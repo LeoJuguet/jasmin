@@ -202,7 +202,6 @@ type for_range = Jasmin.Expr.dir * expr * expr
 
 
 
-
 (* stmt of jasmin (correspond to instr) *)
 type stmt_kind +=
   | S_J_assgn of expr (** lval *) * Jasmin.Expr.assgn_tag * typ * expr
@@ -210,14 +209,9 @@ type stmt_kind +=
   | S_J_opn of
       expr list (** lvals *)
       * Jasmin.Expr.assgn_tag (* 'asm Sopn.sopn *)
-      *
-
-    (Arch.reg, Arch.regx, Arch.xreg, Arch.rflag, Arch.cond, Arch.asm_op,
-      Arch.extra_op
-    )
-
-
-       Arch_extra.extended_op Sopn.sopn
+      * (Arch.reg, Arch.regx, Arch.xreg, Arch.rflag, Arch.cond, Arch.asm_op,
+          Arch.extra_op
+        ) Arch_extra.extended_op Sopn.sopn
       * expr list
   | S_J_syscall of
       expr list (** lvals *) * BinNums.positive Syscall_t.syscall_t * expr list
@@ -467,6 +461,33 @@ let rec jasmin_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ]) ?(
           new_op
           (jasmin_to_mopsa_expr ~translate_info ~range expr2)
           range
+  | PappN (Oabstract pred, args) -> (
+    match pred.pa_name, args with
+    | "init_array", [pos;i1;i2] when List.length args == 3 ->
+      mk_expr (
+        E_stub_J_abstract (Init_array,
+        [
+          mk_var (sub_pos_to_var pos translate_info.args) range;
+          jasmin_to_mopsa_expr ~translate_info ~range i1;
+          jasmin_to_mopsa_expr ~translate_info ~range i2
+        ]
+        )
+      ) range
+    (* | "assigns_array", [pos; i1;i2] when List.length args == 3 -> *)
+      (* mk_expr ( *)
+        (* E_stub_J_abstract (Init_array, *)
+          (* [ *)
+            (* mk_stub_primed (mk_var (sub_pos_to_var pos translate_info.return_var) range) range; *)
+            (* jasmin_to_mopsa_expr ~translate_info ~range i1; *)
+            (* jasmin_to_mopsa_expr ~translate_info ~range i2 *)
+          (* ] *)
+        (* ) *)
+      (* ) range *)
+    | pred_name,_ -> 
+      warn_at range "abstract %s is not yet supported" pred_name;
+      mk_true range
+      )
+  
   | PappN (sopn, exprn) ->
       mk_expr
         (E_J_appN (sopn, List.map (jasmin_to_mopsa_expr ~translate_info ~range) exprn))
@@ -848,4 +869,8 @@ let get_array_type_len typ = match typ with
 
 let get_array_type_wsize typ = match typ with
   | T_J_Array (wsize, len) -> wsize
+  | _ -> panic ~loc:__FILE__ "%a is not of type T_J_Array" pp_typ typ
+
+let get_array_byte_length typ = match typ with
+  | T_J_Array (wsize, len) -> 8 * Prog.arr_size wsize len
   | _ -> panic ~loc:__FILE__ "%a is not of type T_J_Array" pp_typ typ

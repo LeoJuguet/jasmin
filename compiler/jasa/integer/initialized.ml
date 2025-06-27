@@ -23,7 +23,7 @@ module Init = struct
   let maybe = Nb MAYBE
   let not_init = Nb NOT_INIT
   let print fmt t = unformat pp_init ~path:[ Key "init" ] fmt t
-  let top = Nb NOT_INIT
+  let top = Nb MAYBE
   let bottom = BOT
   let is_bottom t = match t with BOT -> true | _ -> false
 

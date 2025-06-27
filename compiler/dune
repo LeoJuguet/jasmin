@@ -13,7 +13,7 @@
   (modules jasminc)
   (flags
    (:standard -rectypes))
-  (modes byte exe)
+  (modes byte)
   (libraries jasminc))
  (executable
   (public_name jasmin2tex)
@@ -21,7 +21,7 @@
   (modules jasmin2tex)
   (flags
    (:standard -rectypes))
-  (modes byte exe)
+  (modes byte)
   (libraries commonCLI))
  (executable
   (public_name jazz2cl)

@@ -32,7 +32,7 @@ param int MONT    = 2285;      /* 2^16 % Q */
 param int BARR    = 20159;     /* (1U << 26)/KYBER_Q + 1 */
 
 
-inline fn __fqmul(reg u16 a b) -> reg u16
+export fn __fqmul(reg u16 a b) -> reg u16
 {
   reg u32 ad bd c t u;
   reg u16 r;
@@ -52,7 +52,7 @@ inline fn __fqmul(reg u16 a b) -> reg u16
   return r;
 }
 
-inline
+export
 fn __barrett_reduce(reg u16 a) -> reg u16
 {
   reg u32 t;
@@ -89,6 +89,7 @@ u16[128] jzetas_inv = {1701, 1807, 1460, 2371, 2338, 2333, 308, 108, 2851, 870, 
                        1571, 205, 2918, 1542, 2721, 2597, 2312, 681, 130, 1602, 1871, 829, 2946, 3065, 1325, 2756, 
                        1861, 1474, 1202, 2367, 3147, 1752, 2707, 171, 3127, 3042, 1907, 1836, 1517, 359, 758, 1441};
 
+export
 fn _poly_add2(reg ptr u16[KYBER_N] rp bp) -> stack u16[KYBER_N]
 requires {init_array(0,0,KYBER_N) && init_array(1,0,KYBER_N)}
 ensures {assigns_array(0,0,KYBER_N)}
@@ -109,7 +110,7 @@ ensures {assigns_array(0,0,KYBER_N)}
   }
   return rp;
 }
-
+export
 fn _poly_csubq(reg ptr u16[KYBER_N] rp) -> reg ptr u16[KYBER_N]
 requires {init_array(0,0,KYBER_N)}
 ensures {assigns_array(0,0,KYBER_N)}
@@ -135,7 +136,7 @@ ensures {assigns_array(0,0,KYBER_N)}
 
 param int DMONT   = 1353;      /* (1ULL << 32) % KYBER_Q */
 
-
+export
 fn _i_poly_frommsg(reg ptr u16[KYBER_N] rp, reg ptr u8[32] ap) -> stack u16[KYBER_N]
 requires {init_array(1,0,32)}
 ensures {assigns_array(0,0,KYBER_N)}
@@ -202,7 +203,7 @@ ensures {assigns_array(0,0,KYBER_N)}
 
 
 
-
+export
 fn _poly_sub(reg ptr u16[KYBER_N] rp ap bp) -> reg ptr u16[KYBER_N]
 requires {init_array(1,0,KYBER_N) && init_array(2,0,KYBER_N)}
 ensures {assigns_array(0,0,KYBER_N)}
