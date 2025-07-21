@@ -30,7 +30,7 @@ DISTDIR ?= jasmin-compiler
 OBELISK ?= obelisk
 
 # --------------------------------------------------------------------
-.PHONY: all CIL check check-ci
+.PHONY: all jasa CIL check check-ci
 .PHONY: clean install uninstall dist
 
 all:

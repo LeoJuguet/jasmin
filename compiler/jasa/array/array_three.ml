@@ -30,9 +30,9 @@ let () =
         (fun next fmt v ->
           match vkind v with
           | V_arr_element (arr, id) ->
-              Format.fprintf fmt "element(%a)_%i" pp_var arr id
+              Format.fprintf fmt "element(%a,%a)_%i" pp_var arr pp_typ (vtyp arr) id
           | V_arr_bounds (arr, id) ->
-              Format.fprintf fmt "bounds(%a)_%i" pp_var arr id
+              Format.fprintf fmt "bounds(%a,%a)_%i" pp_var arr pp_typ (vtyp arr) id
           | _ -> next fmt v);
     }
 
@@ -134,6 +134,7 @@ module ArraySegment = struct
           (
             fun flow -> 
             let callstack = Flow.get_callstack flow in 
+            Debug.debug ~channel:"set2" "out of bounds 1";
             let alarm = mk_alarm (A_J_out_of_bounds_array (mk_var va range,index)) callstack range in
             Flow.raise_alarm alarm man.lattice flow 
             |> Post.return
@@ -147,6 +148,7 @@ module ArraySegment = struct
           (
             fun flow -> 
             let callstack = Flow.get_callstack flow in 
+            Debug.debug ~channel:"set2" "out of bounds 2";
             let alarm = mk_alarm (A_J_out_of_bounds_array (mk_var va range,index)) callstack range in
             Flow.raise_alarm alarm man.lattice flow 
             |> Post.return
@@ -488,6 +490,7 @@ module ArraySegment = struct
         ~felse:(fun flow ->
           (* out of bounds access *)
           let callstack = Flow.get_callstack flow in 
+          Debug.debug ~channel:"set" "out of bounds %a" pp_expr index;
           let alarm = mk_alarm (A_J_out_of_bounds_array (mk_var va range,index)) callstack range in
           Flow.raise_alarm alarm man.lattice flow 
           |> Post.return
@@ -495,6 +498,18 @@ module ArraySegment = struct
         man flow
     | _ -> panic_not_well_formed __LOC__
 
+  (* let set_initialization va a index value *)
+      (* ?(len = mk_one dummy_range) ?(range = dummy_range) *)
+      (* man flow = *)
+    (* let debug s = Debug.debug ~channel:"array set initialization" s in *)
+    (* let index_up = mk_binop index O_plus len range in *)
+    (* match (a.bounds, a.segments) with *)
+    (* | [ zero; b1; b2; bounds ], [ s1; s2; s3 ] -> *)
+      
+    (* | _ -> panic_not_well_formed __LOC__ *)
+
+
+      
   let get va arr index ?(len = mk_one dummy_range) ?(range = dummy_range) man flow
       =
     let index_plus = mk_binop index O_plus len range in
@@ -621,15 +636,15 @@ module Domain = struct
 
   let add_var var value arr = 
   match arr with
-  | TOP -> TOP
-  | BOT -> BOT
-  | Nbt x -> Nbt (VarMap.add var value x)
+    | TOP -> TOP
+    | BOT -> BOT
+    | Nbt x -> Nbt (VarMap.add var value x)
 
   let remove_var var arr = 
-  match arr with
-  | TOP -> TOP
-  | BOT -> BOT
-  | Nbt x -> Nbt (VarMap.remove var x)
+    match arr with
+    | TOP -> TOP
+    | BOT -> BOT
+    | Nbt x -> Nbt (VarMap.remove var x)
 
 
   let exec stmt man flow =
@@ -650,6 +665,12 @@ module Domain = struct
         >>$? fun arrays flow ->
         set_env T_cur (remove_var v arrays) man flow
         |> OptionExt.return
+    | S_forget ({ ekind = E_var (v, mode) } as expr)
+      when is_jasmin_array_type @@ etyp expr ->
+        get_env T_cur man flow
+        >>$? fun arrays flow ->
+        set_env T_cur (remove_var v arrays) man flow
+        |> OptionExt.return
     | S_assign ({ ekind = E_var (arr, _) }, { ekind = E_J_arr_init len })
       ->(
         get_env T_cur man flow
@@ -660,13 +681,13 @@ module Domain = struct
         let rec iter bounds segments flow =
           match (bounds, segments) with
           | [ b1; b2 ], [ s ] ->
-              man.exec (mk_forget (mk_var s range) range) flow >>%? fun flow ->
+              man.exec (mk_remove_var s range) flow >>%? fun flow ->
               map_env T_cur (add_var arr ArraySegment.{ bounds; segments }) man flow
               |> OptionExt.return
           | bound :: b2 :: qbounds, s :: seg :: qseg ->
-              man.exec (mk_forget (mk_var seg range) range) flow
+              man.exec (mk_remove_var seg range) flow
               >>%? fun flow ->
-              man.exec (mk_forget (mk_var b2 range) range) flow >>%? fun flow ->
+              man.exec (mk_remove_var b2 range) flow >>%? fun flow ->
               iter (bound :: qbounds) (s :: qseg) flow
           | _ -> todo __LOC__
         in
@@ -728,19 +749,65 @@ module Domain = struct
         {
           ekind =
             E_stub_J_abstract
-              (Init_array, [ { ekind = E_var (arr, _) }; pos; len ]);
-        } ->(
-        let range = srange stmt in
+              (Init_array,{ekind = E_var (arr, _) } :: pos :: len ::q);
+        } ->
+        (* let range = srange stmt in *)
+        (* get_env T_cur man flow *)
+        (* >>$? fun envs flow -> *)
+        (* match envs with *) 
+        (* | Nbt arrays -> let arr_abs = VarMap.find arr arrays in *)
+        (* ArraySegment.set arr arr_abs pos ~len *)
+          (* (mk_constant ~etyp:T_int Integer.Initialized.(C_init Init.INIT) range) *)
+          (* ~range man flow *)
+        (* >>%? fun flow -> flow |> Post.return |> OptionExt.return *)
+        (* | _ -> Cases.empty flow |> OptionExt.return *)
+        (
+            get_env T_cur man flow
+            >>$? fun envs flow ->
+          match envs with
+          | Nbt arrays ->
+            Debug.debug ~channel:"super" "try to find var : %a" pp_var arr;
+            let arr_abs = VarMap.find arr arrays in
+            ArraySegment.set arr arr_abs pos ~len
+              (mk_constant ~etyp:T_int Integer.Initialized.(C_init Init.INIT) range)
+              ~range man flow
+            >>%? fun flow ->
+            (* FIX it's a fix for the demo but a better fix is required*)
+            (match arr_abs.segments with
+              | [s1;s2;s3] ->
+                let tmp = (mk_constant ~etyp:T_int Integer.Initialized.(C_init Init.INIT) range)
+                in
+                  man.exec (mk_assign (mk_var s1 range) tmp range) flow
+                >>% 
+                man.exec (mk_assign (mk_var s2 range) tmp range)
+                >>% 
+                man.exec (mk_assign (mk_var s3 range) tmp range)
+                |> OptionExt.return
+              | _ -> 
+              todo __LOC__
+            )
+          | _ -> Cases.empty flow |> OptionExt.return
+        )
+    | S_assume {
+        ekind = E_unop (O_log_not, {
+        ekind = 
+            E_stub_J_abstract
+              (Init_array,{ekind = E_var (arr, _) } :: pos :: len ::q);
+        })
+      }
+      -> (
         get_env T_cur man flow
         >>$? fun envs flow ->
-        match envs with 
-        | Nbt arrays -> let arr_abs = VarMap.find arr arrays in
-        ArraySegment.set arr arr_abs pos ~len
-          (mk_constant ~etyp:T_int Integer.Initialized.(C_init Init.INIT) range)
-          ~range man flow
-        >>%? fun flow -> flow |> Post.return |> OptionExt.return
-        | _ -> Cases.empty flow |> OptionExt.return
-        )
+        match envs with
+        | Nbt arrays -> begin
+          let arr_abs = VarMap.find arr arrays in
+          match arr_abs.segments, arr_abs.bounds with
+          | [s1;s2;s3], [b1;b2;b3;b4] -> Cases.empty flow
+            |> OptionExt.return
+          | _ -> ArraySegment.panic_not_well_formed __LOC__
+          end
+        | _ -> todo __LOC__
+      )
     | _ -> None
 
   let eval expr man flow =

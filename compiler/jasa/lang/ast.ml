@@ -1,13 +1,21 @@
 open Jasmin
 open Format
 
+open X86_decl
 module Arch =
+
   (val let use_set0 = true and use_lea = true in
        let call_conv = Glob_options.Linux in
-       let module C : Arch_full.Core_arch =
+       let module C =
          (val CoreArchFactory.core_arch_x86 ~use_lea ~use_set0 call_conv)
        in
-       (module Arch_full.Arch_from_Core_arch (C) : Arch_full.Arch))
+       (module Arch_full.Arch_from_Core_arch (C) : Arch_full.Arch
+          with 
+            type reg = register
+            and type asm_op = X86_instr_decl.x86_op
+            and type extra_op = X86_extra.x86_extra_op            
+        )
+    )
 
 (* ======================================================================  *)
 (*                             MOPSA defs                                  *)
@@ -200,7 +208,10 @@ let () =
 
 type for_range = Jasmin.Expr.dir * expr * expr
 
-
+type asm_op_encapsuled =
+  | X86_64_op of X86_extra.x86_extended_op Sopn.sopn
+  | Arm_op of Arm_extra.arm_extended_op Sopn.sopn
+  | Riscv_op of Riscv_extra.riscv_extended_op Sopn.sopn
 
 (* stmt of jasmin (correspond to instr) *)
 type stmt_kind +=
@@ -338,7 +349,7 @@ let jasmin_to_mopsa_type typ =
 let jasmin_to_mopsa_var var =
   let open CoreIdent in
   let open Prog in
-  mkv (var.v_name^":"^string_of_uid var.v_id)
+  mkv (var.v_name ^":"^string_of_uid var.v_id)
     (V_uniq (var.v_name, hash_of_uid var.v_id))
     (jasmin_to_mopsa_type var.v_ty)
 
@@ -447,7 +458,7 @@ let rec jasmin_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ]) ?(
       jasmin_to_mopsa_var var.gv.pl_desc,
       jasmin_to_mopsa_expr ~translate_info expr ~range)) range
   | Pload (_al, _ws, _expr) ->
-    panic ~loc:__LOC__ "Memory access are not yet supported"
+    panic ~loc:__LOC__ "Memory access are not yet supported at %a" pp_range range
       (* mk_expr *)
         (* (E_J_load *)
            (* ( wsize, *)
@@ -543,7 +554,7 @@ and jasmin_lval_to_mopsa_expr ?(range = mk_program_range [ "dummy location" ]) ?
   | Lvar var -> 
     mk_var (jasmin_to_mopsa_var var.pl_desc) range
   | Lmem (_, _wsize, _var, _expr) ->
-    panic ~loc:__LOC__ "memory operation are not yet supported"
+    panic ~loc:__LOC__ "memory operation are not yet supported at %a" pp_range range
       (* mk_expr *)
         (* (E_J_Lmem *)
            (* ( wsize, *)
@@ -651,33 +662,127 @@ type j_func = {
 
 let declare_args ?(range = mk_program_range ["dummy range"]) args =
   let open Universal.Ast in
+  let args = List.filter (fun v ->
+      match vtyp v with
+      | T_int | T_bool | T_J_U _ -> true
+      | _ -> false
+    ) args
+  in
   if args = [] then mk_nop range
   else mk_block (List.map (fun v -> mk_stmt (S_J_declare v) range) args) range
 
 
-let jasmin_stub_to_universal fname vars stub return range translate_info =
-  (* match stub with *)
-  (* | Some stub -> *)
-    (* let open Prog in *)
-    (* let open Stubs.Ast in *)
-    (* let pre = stub.f_pre in *)
-    (* let post = stub.f_post in *)
+(* translate AST produce in Parser to an mopsa compatible ast*)
+module Translate = struct
+  open Contract_parser.Parse
+
+  let of_binop op range =
+    match op with
+    | Add -> O_plus
+    | Subtract -> O_minus
+    | Multiply -> O_mult
+    | Divide -> O_div
+
+  let of_constant cst range =
+    match cst with
+    | CstBool b -> mk_bool b range
+    | CstInt i -> mk_int i range
+  
+  let of_atom atom signatures_var range =
+    match atom with
+    | Constant cst -> of_constant cst range
+    | Var s ->
+      Debug.debug ~channel:"of_atom" "var to find %s" s;
+      List.iter (fun v ->
+        Debug.debug ~channel:"of_atom is not" "%s" (vname v) 
+      ) signatures_var;
+      let var = List.find (fun v ->
+        match vkind v with
+        | V_uniq (name, _) -> name = s
+        | _ -> false
+      ) signatures_var in
+      mk_var var range
+      
+
+
+  let rec of_expr arg signatures_var range =
+    match arg with
+    | Atom atom -> of_atom atom signatures_var range 
+    | BinOp (e1, op, e2) ->
+      mk_binop ~etyp:T_int (of_expr e1 signatures_var range) (of_binop op range) (of_expr e2 signatures_var range) range
+    | ArrayAccess (_, _) -> failwith "array access not yet supported in contract checks"
+
+  
+  let of_array_predicate (ExprArg name::ExprArg len_init::ExprArg len::other) signatures_var range =
+    let name = of_expr name signatures_var range in
+    let len_init = of_expr len_init signatures_var range in
+    let len = of_expr len signatures_var range in
+    let writable = ref (mk_bool false range) in
+    mk_expr
+      (E_stub_J_abstract (Init_array, [name; len_init; len; !writable]))
+      range
+
+
+  
+  let of_contract_ensures ensures signatures_var range =
+    match ensures with
+    | Condition _cond ->
+      warn "condition in ensures are for the moment ignored";
+      None
+    | ArrayPredicate array_predicate ->
+      Some (of_array_predicate array_predicate signatures_var range)
+  
+  let of_contract_requires requires signatures_var range =
+    of_array_predicate requires signatures_var range
+
+
+end
+
+
+
+let jasmin_stub_to_universal fname vars annot return range translate_info =
+    let open Prog in
+    let open Stubs.Ast in
+    let signatures_args = vars in
+    let pre =  List.filter_map (fun (ident, args) ->
+      if Jasmin.Location.unloc ident = "requires" then
+      match args with
+      | Some args -> (
+        match Jasmin.Location.unloc args with
+        | Jasmin.Annotations.Astring args ->
+          Contract_parser.Parse.parse_contract_requires args
+          |> fun requires -> Translate.of_contract_requires requires signatures_args range
+          |> fun expr -> S_leaf (S_requires (with_range (with_range (F_expr (expr)) range) range))
+          |> OptionExt.return
+        | _ -> None
+        )
+      | _ -> None
+      else None
+      ) Jasmin.FInfo.(annot.f_user_annot) in
+    let post =  List.filter_map (fun (ident, args) ->
+      if Jasmin.Location.unloc ident = "ensures" then
+      match args with
+      | Some args -> (
+        match Jasmin.Location.unloc args with
+        | Jasmin.Annotations.Astring args ->
+          Contract_parser.Parse.parse_contract_ensures args
+          |> fun ensures -> Translate.of_contract_ensures ensures signatures_args range
+          |> fun expr ->(
+            match expr with
+            | None -> None
+            | Some expr -> S_leaf (S_ensures (with_range (with_range (F_expr expr) range) range))
+                          |> OptionExt.return
+          )
+        | _ -> None
+        )
+      | _ -> None
+      else None
+      ) annot.f_user_annot in
     (* let pre = List.map (fun e -> S_leaf (S_requires (with_range (with_range (F_expr (jasmin_to_mopsa_expr ~translate_info ~range (snd e))) range ) range ))) pre in *)
     (* let post = List.map (fun e -> S_leaf (S_ensures (with_range (with_range (F_expr (jasmin_to_mopsa_expr ~translate_info ~range (snd e))) range ) range))) post in *)
-    (* { *)
-      (* stub_func_name = fname; *)
-      (* stub_func_body = pre @ post; *)
-      (* stub_func_params = vars; *)
-      (* stub_func_locals = []; *)
-      (* stub_func_assigns = []; *)
-      (* stub_func_return_type = return; *)
-      (* stub_func_range = range *)
-    (* } *)
-  (* | None -> *) 
-  Stubs.Ast.
     {
       stub_func_name = fname;
-      stub_func_body = [];
+      stub_func_body = pre @ post;
       stub_func_params = vars;
       stub_func_locals = [];
       stub_func_assigns = [];
@@ -701,7 +806,12 @@ let jasmin_to_mopsa_func func =
   in
   let body =
       Lang.Ast.mk_block
-        (declare_args args ~range:declare_range :: List.map jasmin_to_mopsa_stmt func.f_body @ if List.length ret = 0 then [] else [mk_stmt (S_J_return ret) return_range] )
+        (
+        (* declare_args args ~range:declare_range :: *)
+          List.map jasmin_to_mopsa_stmt func.f_body @
+          if List.length ret = 0 then []
+          else [mk_stmt (S_J_return ret) return_range]
+          )
         range
   in
   let return_typ = Some (T_J_Return (List.map jasmin_to_mopsa_type func.f_tyout)) in
@@ -709,8 +819,8 @@ let jasmin_to_mopsa_func func =
     f_loc = range ;
     f_name = func.f_name;
     (* TODO: parse annotations *)
-    (* f_stub = jasmin_stub_to_universal func.f_name.fn_name args func.f_contra return_typ range { args ; return_var = ret }; *)
-    f_stub = jasmin_stub_to_universal func.f_name.fn_name args None return_typ range { args ; return_var = ret };
+    f_stub = jasmin_stub_to_universal func.f_name.fn_name args func.f_annot return_typ range { args ; return_var = ret };
+    (* f_stub = jasmin_stub_to_universal func.f_name.fn_name args None return_typ range { args ; return_var = ret }; *)
     f_tyin = List.map jasmin_to_mopsa_type func.f_tyin;
     f_args = args;
     f_body = body;
@@ -831,6 +941,7 @@ let get_locals_var prog =
     | S_if (c,strue,sfalse) -> locals_stmt sfalse (locals_stmt strue (locals_expr c vars))
     | S_J_call(lval,_,args) -> List.fold_right locals_expr lval (List.fold_right locals_expr args vars)
     | S_J_return return_var -> List.fold_right VarSet.add return_var vars
+    | S_J_opn(lvals,_,_,args) -> List.fold_right locals_expr lvals (List.fold_right locals_expr args vars)
     | _ -> vars
   and locals_expr expr vars =
     match ekind expr with

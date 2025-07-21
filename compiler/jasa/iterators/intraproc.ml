@@ -32,6 +32,8 @@ module JasminFlowDomain = struct
         match ekind e with
         | E_J_Lnone _ ->
           None
+        | E_J_Laset (_,_,_,_) ->
+          Some (mk_assign e (mk_top T_int range) range)
         | _ ->
           Some (mk_assign e (mk_top (etyp e) range) range)
         )

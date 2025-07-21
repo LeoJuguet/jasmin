@@ -30,6 +30,8 @@ open Mopsa
 open Universal
 
 let opt_functions = ref []
+let opt_functions_analyze = ref []
+let opt_target_arch = ref "x86-64"
 
 let () =
   register_language_option "Jasmin"
@@ -39,6 +41,24 @@ let () =
       doc = " select functions to check";
       spec = ArgExt.String (ArgExt.set_string_list_lifter opt_functions, ArgExt.empty);
       default = "all";
+    };
+
+  register_language_option "Jasmin"
+    {
+      key = "-analyze-only";
+      category = "Jasmin";
+      doc = " select functions to check";
+      spec = ArgExt.String (ArgExt.set_string_list_lifter opt_functions_analyze, ArgExt.empty);
+      default = "all";
+    };
+
+  register_language_option "Jasmin"
+    {
+      key = "-target-arch";
+      category = "Jasmin";
+      doc = " select architecture target";
+      spec = ArgExt.Set_string (opt_target_arch, ArgExt.empty);
+      default = !opt_target_arch;
     }
 
 let () =
@@ -170,7 +190,7 @@ module EntryDomainJasmin = struct
           Debug.debug ~channel:name "is not a leaf";
           aux q man flow
     in
-    aux stub.stub_func_body man flow
+    aux (*stub.stub_func_body*) [] man flow
 
   let get_requires_in_assumes prog =
     let stub = prog.f_stub in
@@ -190,13 +210,15 @@ module EntryDomainJasmin = struct
         let open Stubs.Ast in
         Flow.join_list man.lattice
           ~empty:(fun () -> flow)
-          (List.map
+          (List.filter_map
              (fun prog ->
+               if !opt_functions_analyze = [] || List.exists (fun f -> f = prog.f_name.fn_name) !opt_functions_analyze then begin
+               Debug.debug ~channel:name "start analyzing %s" prog.f_name.fn_name;
                let body = prog.f_body in
                let locals_vars = VarSet.elements (get_locals_var body) in
                (* add vars to values domains *)
                let range = srange body in
-               let f = Flow.add T_cur flow in
+               (* let flow = Flow.add T_cur () man.lattice flow in *)
                let declare_args = declare_args prog.f_args in
                let add_vars =
                  List.map
@@ -230,6 +252,10 @@ module EntryDomainJasmin = struct
                 )
                |> post_to_flow man
                |> Flow.remove T_cur
+               |> Flow.bottom_from
+               |> OptionExt.return
+               end
+               else None
              )
              prog.functions)
         |> Post.return |> OptionExt.return

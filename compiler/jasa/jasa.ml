@@ -5,6 +5,7 @@ module Integer = Integer
 module Memory = Memory
 module Array = Array
 module Jasmin_stub = Jasmin_stub
+module Arch = Arch
 
 let () =
   (* Start Mopsa *)

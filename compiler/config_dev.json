@@ -8,6 +8,7 @@
 					"jasmin.program"
 					,"jasmin.declare"
 					,"jasmin.iterators.loop"
+					,"jasmin.arch.specific"
 					,"jasmin.iterators.intraproc"
 					,"jasmin.iterators.interproc"
 					,"jasmin.iterators.interproc_assembly"

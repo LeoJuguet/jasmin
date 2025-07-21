@@ -9,6 +9,17 @@ module Domain = struct
     let name = "jasmin.iterators.interproc"
   end)
 
+  let jasmin_function_inlines = ref false
+
+  let () =
+    register_domain_option name {
+      key = "-function-inline";
+      doc = "inline functions calls";
+      category = "jasmin";
+      default = string_of_bool !jasmin_function_inlines;
+      spec = ArgExt.Bool (fun b -> jasmin_function_inlines := b);
+    } 
+
   let checks = []
   let init prog man flow = None
 
@@ -16,7 +27,40 @@ module Domain = struct
     let range = srange stmt in
     let open Universal.Ast in
     match skind stmt with
-    | S_J_call (lvars, func, args) -> (
+    | S_J_call (lvars, func, args) when !jasmin_function_inlines -> (
+      let prog = get_jasmin_program flow in
+      let called_func =
+          match List.find_opt (fun f -> f.f_name = func) prog.functions with
+          | Some f_info -> f_info
+          | None -> panic "function %s not found" func.fn_name
+      in
+
+      let args_declare = List.map (fun arg ->
+          mk_add_var arg range
+        ) called_func.f_args in
+      (* let args_declare = declare_args called_func.f_args in *)
+      let assign_args =
+        List.map2 (fun func_arg arg_val ->
+          mk_assign (mk_var func_arg range) arg_val range
+        ) called_func.f_args args
+      in
+      let return_assign =
+        List.map2 (fun lval ret_val ->
+          mk_assign lval (mk_var ret_val range) range
+        ) lvars called_func.f_ret
+      in
+      let forget_calledfunc_var =
+        List.map (fun v -> mk_forget_var v range) (called_func.f_args)
+      in
+      let blocks =
+        args_declare @ 
+        assign_args @ [called_func.f_body] @ return_assign
+        @ forget_calledfunc_var
+      in
+      man.exec (mk_block blocks range) flow
+      |> OptionExt.return
+    )
+    | S_J_call (lvars, func, args) when not !jasmin_function_inlines -> (
         let prog = get_jasmin_program flow in
         let stub =
           match List.find_opt (fun f -> f.f_name = func) prog.functions with

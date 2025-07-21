@@ -221,9 +221,9 @@ module Domain = struct
              range)
           flow
         |> OptionExt.return
-    | S_assume { ekind = E_stub_J_abstract (Init_array, args) } ->
-        Debug.debug "%a" pp_stmt stmt;
-        Post.return flow |> OptionExt.return
+    (* | S_assume { ekind = E_stub_J_abstract (Init_array, args) } -> *)
+        (* Debug.debug ~channel:name "%a" pp_stmt stmt; *)
+        (* Post.return flow |> OptionExt.return *)
     (* | S_assume { ekind = E_unop (O_log_not, { ekind = E_stub_J_abstract (Init_array, args)}) } -> *)
     (*   Post.return flow *)
     (*   |> OptionExt.return *)
@@ -232,7 +232,6 @@ module Domain = struct
         man.exec (mk_remove_var (mk_init_array var) range) flow
         |> OptionExt.return
     | _ ->
-        Debug.debug "%a" pp_stmt stmt;
         None
 
   let ask : type r. ('a, r) query -> _ man -> _ flow -> ('a, r) cases option =

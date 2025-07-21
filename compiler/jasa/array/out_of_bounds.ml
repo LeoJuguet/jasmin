@@ -101,6 +101,7 @@ module Domain = struct
             (A_J_out_of_bounds_array (arr, index))
             call_stack (erange arr)
         in
+        Debug.debug ~channel:name "raise alarm out of bounds";
         Flow.raise_alarm alarm ~bottom:false man.lattice fflow |> Cases.empty)
       man flow
 
