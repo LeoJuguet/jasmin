@@ -218,10 +218,9 @@ let main () =
       let e = Conv.error_of_cerror (Printer.pp_err ~debug:!debug) e in
       raise (HiError e)
     | Utils0.Ok asm ->
-      if !Glob_options.print_export_info || !Glob_options.print_export_info_json then begin
+      if !Glob_options.print_export_info_json then begin
         Format.printf "%a" (fun fmt ->
-          PrintExportInfo.pp_export_info
-            ~json:!Glob_options.print_export_info_json
+          PrintExportInfo.pp_export_info_json
             fmt
             env
             prog)

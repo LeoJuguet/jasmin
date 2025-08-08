@@ -24,7 +24,6 @@ let color = ref Auto
 let lea = ref false
 let set0 = ref false
 let print_stack_alloc = ref false
-let print_export_info = ref false
 let print_export_info_json = ref false
 let introduce_array_copy = ref true
 let print_dependencies = ref false 
@@ -199,7 +198,6 @@ let options = [
     "-color", Arg.Symbol (["auto"; "always"; "never"], set_color), " Print messages with color";
     "-help-intrinsics", Arg.Set help_intrinsics, " List the set of intrinsic operators (and exit)";
     "-print-stack-alloc", Arg.Set print_stack_alloc, " Print the results of the stack allocation OCaml oracle";
-    "-print-export-info", Arg.Set print_export_info, " Print information about exported functions";
     "-print-export-info-json", Arg.Set print_export_info_json, " Print information about exported functions in json";
     "-lazy-regalloc", Arg.Set lazy_regalloc, " Allocate variables to registers in program order";
     "-pall"    , Arg.Unit set_all_print, " Print program after each compilation steps";

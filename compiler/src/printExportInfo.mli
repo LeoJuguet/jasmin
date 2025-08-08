@@ -1,7 +1,6 @@
 open Prog
 
-val pp_export_info :
-  ?json:bool ->
+val pp_export_info_json :
   Format.formatter ->
   ('reg, 'regx, 'xreg, 'rglag, 'cond, 'asm_op, 'extra_op) Arch_extra.extended_op
   Pretyping.Env.env ->

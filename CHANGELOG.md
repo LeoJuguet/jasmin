@@ -22,10 +22,9 @@
   ([PR #1083](https://github.com/jasmin-lang/jasmin/pull/1083);
   fixes [#1079](https://github.com/jasmin-lang/jasmin/issues/1079)).
 
-- Added two new options `-print-export-info` and `-print-export-info-json` to
-  display interesting information about exported functions, in readable and
-  json formats. The readable format only filters out important information
-  (for the moment, if the argument alignment is other than 8).
+- Add a new option `-print-export-info-json` to display interesting information
+  about exported functions, in json formats including the target architechure,
+  arguments, annotations and parameters.
   ([PR #1123](https://github.com/jasmin-lang/jasmin/pull/1123)).
 
 ## Bug fixes

@@ -111,55 +111,6 @@ let architecture_to_string arch =
 
 (***********************************************************************)
 
-let pp_export_info_readable fmt export_info =
-  let pp_fn_types fmt (args, rets) =
-    let pp_type_arg fmt arg =
-      F.fprintf fmt "@[%a : %a %a@]" (pp_var ~debug:false) arg.arg_var pp_kind
-        arg.arg_var.v_kind (pp_gtype pp_size) arg.arg_var.v_ty
-    in
-    let pp_ret_typ fmt rets =
-      let rets =
-        List.filter_map
-          (fun ret ->
-            if List.exists (fun arg -> arg.arg_var.v_id = ret.ret_var.v_id) args
-            then None
-            else Some ret.ret_var)
-          rets
-      in
-
-      if rets <> [] then
-        F.fprintf fmt "%a" (pp_list ",@ " pp_type_with_ptr) rets
-      else F.fprintf fmt "()"
-    in
-    F.fprintf fmt "@[<hov>@ %a@ -> %a@]"
-      (pp_list "@ -> " pp_type_arg)
-      args pp_ret_typ rets
-  in
-
-  let pp_aligned_args fmt args =
-    let aligned_args =
-      (* filter only important alignements (>8) *)
-      List.filter (fun arg -> arg.arg_alignment <> U8) args
-    in
-
-    let pp_aligned_arg fmt arg =
-      F.fprintf fmt "@[%a : %a@]" (pp_var ~debug:false) arg.arg_var pp_wsize
-        arg.arg_alignment
-    in
-
-    F.fprintf fmt "@[<v>%a@]" (pp_list ", " pp_aligned_arg) aligned_args
-  in
-
-  let pp_export_info_fn fmt fn =
-    F.fprintf fmt "@[<v>%s:@[<v>@ type : %a @ argument alignment : [%a]@]@ @]"
-      fn.name.fn_name pp_fn_types (fn.args, fn.rets) pp_aligned_args fn.args
-  in
-  F.fprintf fmt "@[<v>%a@]@."
-    (pp_list "@ " pp_export_info_fn)
-    (List.rev export_info.funcs)
-
-(***********************************************************************)
-
 let pp_export_info_json fmt export_info =
   let pp_args fmt args =
     let pp_arg fmt arg =
@@ -212,7 +163,6 @@ let pp_export_info_json fmt export_info =
     pp_params
     (List.rev export_info.params)
 
-let pp_export_info ?(json = true) fmt env prog asm_prog =
+let pp_export_info_json fmt env prog asm_prog =
   let export_info = collect_export_info env prog asm_prog in
-  if json then pp_export_info_json fmt export_info
-  else pp_export_info_readable fmt export_info
+  pp_export_info_json fmt export_info
