@@ -12,6 +12,7 @@ module F = Format
 (** Pretty printer for displaying export inforamation after compilation *)
 
 type export_info = {
+  arch_target: architecture;
   funcs : export_info_fn list;
   params : (pexpr_ gvar * pexpr_ gexpr) list;
 }
@@ -67,7 +68,8 @@ let collect_export_info env prog asm_prog =
       (fun pmod -> match pmod with MIparam p -> Some p | _ -> None)
       (Env.decls env)
   in
-  { funcs; params }
+  let arch_target = !Glob_options.target_arch in
+  { arch_target; funcs; params }
 
 (***********************************************************************)
 
@@ -94,10 +96,18 @@ and pp_attribute_json fmt = function
         (L.unloc a)
 
 and pp_annotation_json fmt (k, v) =
-  F.fprintf fmt "@[<v>{\"name\": %S,@ %a}@]" (L.unloc k) pp_attribute_json v
+  F.fprintf fmt "@[<v>{\"name\": %S, %a}@]" (L.unloc k) pp_attribute_json v
 
 and pp_annotations_json fmt a =
-  Format.fprintf fmt "@[%a@]" (pp_list ",@ " pp_annotation_json) a
+  Format.fprintf fmt "@[<v>%a@]" (pp_list ",@ " pp_annotation_json) a
+
+(***********************************************************************)
+
+let architecture_to_string arch =
+  match arch with
+  | X86_64 -> "x86-64"
+  | ARM_M4 -> "arm-m4"
+  | RISCV -> "riscv"
 
 (***********************************************************************)
 
@@ -159,7 +169,7 @@ let pp_export_info_json fmt export_info =
         (pp_var ~debug:false) arg.arg_var pp_kind arg.arg_var.v_kind
         (pp_gtype pp_size) arg.arg_var.v_ty pp_wsize arg.arg_alignment
     in
-    F.fprintf fmt "@[<v>%a@]" (pp_list ", " pp_arg) args
+    F.fprintf fmt "@[<v>%a@]" (pp_list ",@ " pp_arg) args
   in
 
   let pp_rets fmt rets =
@@ -183,17 +193,20 @@ let pp_export_info_json fmt export_info =
   in
 
   let pp_params fmt globals =
+    (* force expression to be inlined, because multi line strings doesn't exists in json *)
+
     let pp_param fmt (var, expr) =
       let pp_gvar fmt var = F.fprintf fmt "%S" var.v_name in
-      F.fprintf fmt "@[<v>{@[<hov>\"name\" : %a,@ \"value\": \"%a\"@]}@]"
+      F.fprintf fmt "@[<v>{@[<hov>\"name\" : %a,@ \"expr\" : @[<h>\"%a\"@]@]}@]"
         pp_gvar var pp_pexpr expr
     in
     F.fprintf fmt "@[<v>%a@]" (pp_list ",@ " pp_param) globals
   in
+    F.set_margin max_int;
 
   F.fprintf fmt
-    "@[<v>{@ @[<v>\"functions\": [@[<v>@ %a@ @]],@ \"params\" : [@[%a]@]@]@ \
-     }@]@."
+    "@[<v>{@ \"arch_target\": %S,@ @[<v>\"functions\": [@[<v>@ %a@ @]],@ \"params\" : [@[%a]@]@]@ }@]@."
+    (architecture_to_string export_info.arch_target)
     (pp_list ",@\n" pp_func)
     (List.rev export_info.funcs)
     pp_params
