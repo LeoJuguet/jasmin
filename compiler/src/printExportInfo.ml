@@ -12,7 +12,7 @@ module F = Format
 (** Pretty printer for displaying export inforamation after compilation *)
 
 type export_info = {
-  arch_target: architecture;
+  arch_target : architecture;
   funcs : export_info_fn list;
   params : (pexpr_ gvar * pexpr_ gexpr) list;
 }
@@ -144,8 +144,6 @@ let pp_export_info_json fmt export_info =
   in
 
   let pp_params fmt globals =
-    (* force expression to be inlined, because multi line strings doesn't exists in json *)
-
     let pp_param fmt (var, expr) =
       let pp_gvar fmt var = F.fprintf fmt "%S" var.v_name in
       F.fprintf fmt "@[<v>{@[<hov>\"name\" : %a,@ \"expr\" : @[<h>\"%a\"@]@]}@]"
@@ -153,10 +151,13 @@ let pp_export_info_json fmt export_info =
     in
     F.fprintf fmt "@[<v>%a@]" (pp_list ",@ " pp_param) globals
   in
-    F.set_margin max_int;
+
+  (* force expression to be inlined, because multi line strings doesn't exists in json *)
+  F.set_margin max_int;
 
   F.fprintf fmt
-    "@[<v>{@ \"arch_target\": %S,@ @[<v>\"functions\": [@[<v>@ %a@ @]],@ \"params\" : [@[%a]@]@]@ }@]@."
+    "@[<v>{@ \"arch_target\": %S,@ @[<v>\"functions\": [@[<v>@ %a@ @]],@ \
+     \"params\" : [@[%a]@]@]@ }@]@."
     (architecture_to_string export_info.arch_target)
     (pp_list ",@\n" pp_func)
     (List.rev export_info.funcs)
